@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Threading &amp; realtime safety — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="08-audio-files.html">prev</a>
+    <a href="10-recording-comping.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">09 · threading &amp; realtime safety</div>
+    <h1>Threading &amp; realtime safety</h1>
+    <p class="lede">
+      The engine runs on half a dozen threads and trusts none of them
+      to hold a lock for long. A scheduler splits the Node graph across
+      workers; a toolkit of single-producer queues, hazard pointers,
+      and realtime-safe allocators keeps the audio callback from
+      touching anything that blocks.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: many threads, one inviolable one</h2>
+    <p>
+      A playing DAW has at least these threads active: the audio
+      callback (provided by the OS / host), the message thread (UI,
+      ValueTree dispatch), disk workers (reading audio files,
+      generating proxies, writing recordings), the MIDI high-res
+      timer (for outbound MIDI), the plugin-scan process, and —
+      during playback — a pool of audio-graph workers. The rule is
+      simple and absolute: the audio thread must not lock, allocate,
+      or call anything that might block. Everything else exists to
+      keep that rule true.
+    </p>
+    <p>
+      <code>LockFreeMultiThreadedNodePlayer</code> is the scheduler
+      for the graph. Each audio block, it walks the Node DAG and
+      dispatches independent sub-trees to worker threads. Workers
+      pull from a queue, process, and signal when done; the callback
+      thread assembles the root output. No mutex is taken on the
+      critical path. Workers are created by a
+      <code>ThreadPoolCreator</code> — a function picked from six
+      pooling strategies (<code>conditionVariable</code>,
+      <code>realTime</code>, <code>hybrid</code>,
+      <code>semaphore</code>, <code>lightweightSemaphore</code>,
+      <code>lightweightSemHybrid</code>) so embedders can pick the
+      tradeoff between idle-CPU and wake-up latency that fits their
+      platform.
+    </p>
+
+    <h2>Implementation: the realtime-safety toolkit</h2>
+    <p>
+      Third-party libraries doing the heavy lifting: <strong>farbot</strong>
+      (fifo, wait-free primitives by hogliux) is vendored inside
+      <code>tracktion_graph/3rd_party/farbot/</code>.
+      <strong>moodycamel::concurrentqueue</strong> provides the
+      MPMC queue used for inter-thread messages.
+      <strong>moodycamel::lightweightsemaphore</strong> is the
+      spin/sleep hybrid the lightweight pool strategies use.
+      <strong>crill</strong> contributes realtime primitives (spin
+      locks, progressive backoff helpers).
+      <strong>rigtorp::SPSCQueue</strong> is used where single-producer
+      single-consumer is enough.
+      <strong>rpmalloc</strong> is a realtime-friendly allocator
+      option. <strong>choc</strong> supplies lock-free buffers and
+      string utilities.
+    </p>
+    <p>
+      On top of those, the engine contributes its own pieces:
+      <code>tracktion_core::threads::MultipleWriterSeqLock</code> is a
+      sequence-lock for situations where a few writers update
+      infrequently but many readers poll (Link tempo updates, UI-
+      driven parameter writes). <code>ScopedSteadyLoad</code> is a
+      RAII helper that bounds the audio thread's work-per-block under
+      stress.
+    </p>
+    <p>
+      The boundaries between threads use specific patterns:
+      <em>UI → audio</em> goes through ValueTree change listeners that
+      set a flag on the message thread, which the audio thread reads
+      atomically next block.
+      <em>UI → audio for position changes</em> goes through
+      <code>EditPlaybackContext::postPosition()</code>, whose pending
+      state the audio thread consumes at the start of the next block.
+      <em>Audio → UI</em> goes through message queues and async
+      updaters. <em>Audio → disk</em> goes through the AudioFifo ring
+      buffers and the <code>AudioFileCache</code> read-ahead path.
+      <em>Audio → MIDI out</em> goes through
+      <code>MidiNoteDispatcher</code>'s high-res-timer thread.
+    </p>
+
+    <h2>Tradeoff: lock-free is not free</h2>
+    <p>
+      Lock-free code is harder to write, harder to audit, and harder
+      to port than locked code. The engine pays that cost because the
+      alternative — a priority-inverted audio thread waiting on the UI
+      thread once per block — is not a tradeoff: it's a guarantee of
+      glitches. The six-strategy ThreadPoolCreator reflects the
+      other side of the cost: no single worker-idle strategy is right
+      for all platforms. Servers want condition variables (let idle
+      cores sleep). Low-latency mobile wants spin-with-progressive-
+      backoff (wake up instantly). The engine refuses to pick, so
+      embedders pick.
+    </p>
+    <p>
+      The engine also tolerates dependency weight here in a way it
+      doesn't elsewhere. Seven third-party libraries to keep the
+      audio thread quiet is a lot of surface. The alternative —
+      rolling in-house SPSC queues, semaphores, allocators — is a
+      deep rabbit hole and has burned other DAWs before. Using
+      published, audited libraries is the right call.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      The scheduling algorithm inside
+      <code>LockFreeMultiThreadedNodePlayer</code> — how it orders
+      ready nodes, when it decides a block has starved, how it
+      handles the graph-rebuild swap atomically — is the interesting
+      bit I haven't yet read in full. It deserves its own appendix
+      rather than being compressed into this diagram. Same for the
+      exact semantics of the <code>hybrid</code> pool strategy, which
+      reads like it contains the hard-won tuning knowledge.
+    </p>
+    <p class="note">
+      Notable omission: this diagram calls out the libraries but
+      doesn't draw every single queue in the engine. Each subsystem's
+      diagram (MIDI, audio files, automation) shows the specific
+      queues that matter for that subsystem; this one is the map of
+      the country.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "threads",   "label": "THREADS (who exists)",           "height": 200 },
+    { "id": "sched",     "label": "GRAPH SCHEDULER",                "height": 110 },
+    { "id": "toolkit",   "label": "REALTIME TOOLKIT (3rd party)",   "height": 200 },
+    { "id": "engine",    "label": "ENGINE-OWN PRIMITIVES",          "height": 110 },
+    { "id": "bridges",   "label": "CROSS-THREAD BRIDGES",           "height": 200 }
+  ],
+  "nodes": [
+    { "id": "audio",    "lane": "threads", "col": 0, "label": "Audio callback",
+      "purpose": "The OS / host-provided realtime thread. Must not lock, allocate, or block. Everything else on this diagram exists to keep that true.",
+      "file": "(OS / host)" },
+    { "id": "msg",      "lane": "threads", "col": 1, "label": "Message thread",
+      "purpose": "JUCE message thread. UI, ValueTree dispatch, component repaints. Read-mostly for audio-thread state; coordinates via atomics / AsyncUpdater.",
+      "file": "(juce)" },
+    { "id": "workers",  "lane": "threads", "col": 2, "label": "Graph workers",
+      "purpose": "Pool of worker threads created by ThreadPoolCreator. Process independent sub-DAGs each audio block.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h" },
+    { "id": "disk",     "lane": "threads", "col": 3, "label": "Disk workers",
+      "purpose": "AudioFileCache read-ahead thread(s), proxy generator, recording writer. All talk to the audio thread through AudioFifo ring buffers.",
+      "file": "modules/tracktion_engine/audio_files/" },
+    { "id": "midiTim",  "lane": "threads", "col": 4, "label": "MIDI-out timer",
+      "purpose": "juce::HighResolutionTimer used by MidiNoteDispatcher. Drains the queue the audio thread fills and writes to hardware.",
+      "file": "modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h" },
+    { "id": "scan",     "lane": "threads", "col": 5, "label": "Plugin-scan child",
+      "purpose": "Optional separate process used to scan plugins (crash isolation). See diagram 6 — PluginManager::usesSeparateProcessForScanning.",
+      "file": "modules/tracktion_engine/plugins/tracktion_PluginManager.h" },
+    { "id": "uiThread", "lane": "threads", "col": 0, "row": 1, "label": "UI drag / interaction",
+      "purpose": "Usually the message thread, but called out separately because UI-driven transport changes (drag to scrub) hit EditPlaybackContext.postPosition on this thread.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h" },
+    { "id": "linkThr",  "lane": "threads", "col": 3, "row": 1, "label": "Link callback",
+      "purpose": "AbletonLink's internal thread delivering tempo/transport updates. Calls into TransportControl from outside.",
+      "file": "modules/tracktion_engine/playback/tracktion_AbletonLink.h" },
+
+    { "id": "lfnp",     "lane": "sched", "col": 1, "label": "LockFreeMultiThreadedNodePlayer",
+      "purpose": "The realtime scheduler. Walks the Node DAG, dispatches ready sub-trees to workers, assembles outputs on the callback thread. No mutex on the critical path.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_LockFreeMultiThreadedNodePlayer.h" },
+    { "id": "pool",     "lane": "sched", "col": 4, "label": "ThreadPoolCreator",
+      "purpose": "Embedder-selected pool strategy: conditionVariable / realTime / hybrid / semaphore / lightweightSemaphore / lightweightSemHybrid. Trades idle-CPU vs wake-up latency.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h" },
+
+    { "id": "farbot",   "lane": "toolkit", "col": 0, "label": "farbot",
+      "purpose": "Vendored wait-free FIFOs and primitives (hogliux/farbot). Lives inside tracktion_graph/3rd_party/farbot/.",
+      "file": "modules/tracktion_graph/3rd_party/farbot/" },
+    { "id": "cq",       "lane": "toolkit", "col": 1, "label": "moodycamel::ConcurrentQueue",
+      "purpose": "MPMC lock-free queue. Used for general inter-thread messaging where multiple producers exist.",
+      "file": "modules/tracktion_graph/3rd_party/concurrentqueue.h" },
+    { "id": "lws",      "lane": "toolkit", "col": 2, "label": "lightweightsemaphore",
+      "purpose": "moodycamel's spin/sleep hybrid semaphore. Backs the 'lightweight' pool strategies.",
+      "file": "modules/tracktion_graph/3rd_party/lightweightsemaphore.h" },
+    { "id": "crill",    "lane": "toolkit", "col": 3, "label": "crill",
+      "purpose": "Realtime primitives (spin locks, progressive backoff). JUCE-affiliated.",
+      "file": "(submodule in tracktion_engine/3rd_party)" },
+    { "id": "rig",      "lane": "toolkit", "col": 4, "label": "rigtorp SPSC",
+      "purpose": "Single-producer / single-consumer queue used where the stronger MPMC is not needed.",
+      "file": "(submodule in tracktion_engine/3rd_party)" },
+    { "id": "rpm",      "lane": "toolkit", "col": 5, "label": "rpmalloc",
+      "purpose": "Realtime-friendly allocator. Used where audio-thread-adjacent paths need allocation behaviour more predictable than the system allocator.",
+      "file": "(submodule in tracktion_engine/3rd_party)" },
+    { "id": "choc",     "lane": "toolkit", "col": 1, "row": 1, "label": "choc",
+      "purpose": "Julian Storer's header-only utilities: lock-free buffers, string helpers, value types.",
+      "file": "(submodule in tracktion_engine/3rd_party)" },
+
+    { "id": "seqlock",  "lane": "engine", "col": 1, "label": "MultipleWriterSeqLock",
+      "purpose": "Tracktion's own sequence lock. A few writers update infrequently; many readers (UI, audio) poll. Used where Link and parameter writes meet the audio thread.",
+      "file": "modules/tracktion_core/threads/tracktion_MultipleWriterSeqLock.h" },
+    { "id": "ssl",      "lane": "engine", "col": 4, "label": "ScopedSteadyLoad",
+      "purpose": "RAII scope that bounds audio-thread work under CPU stress. Protects against runaway blocks.",
+      "file": "modules/tracktion_engine/playback/tracktion_ScopedSteadyLoad.h" },
+
+    { "id": "fifo",     "lane": "bridges", "col": 0, "label": "AudioFifo",
+      "purpose": "Lock-free SPSC ring for samples. Audio file cache ↔ audio thread, recording writer ↔ audio thread.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFifo.h" },
+    { "id": "async",    "lane": "bridges", "col": 1, "label": "juce::AsyncUpdater",
+      "purpose": "Audio-thread-safe message-thread callback. Used wherever the audio path needs to ping UI without blocking.",
+      "file": "(juce)" },
+    { "id": "vt",       "lane": "bridges", "col": 2, "label": "ValueTree listeners",
+      "purpose": "Message-thread-only change-dispatch. UI writes → ValueTree → engine-side listeners set atomic flags the audio thread observes.",
+      "file": "(juce + model/edit)" },
+    { "id": "pending",  "lane": "bridges", "col": 3, "label": "postPosition",
+      "purpose": "EditPlaybackContext's way of taking a UI-thread 'please jump to X' and applying it safely at the start of the next block.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h" },
+    { "id": "midiQ",    "lane": "bridges", "col": 4, "label": "MIDI-out queue",
+      "purpose": "Audio thread pushes timestamped MIDI; MidiNoteDispatcher's timer thread drains it. (Diagram 5, flag 3.)",
+      "file": "modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h" },
+    { "id": "atomics",  "lane": "bridges", "col": 5, "label": "PlayHead atomics",
+      "purpose": "PlayHead exposes speed / looping / userDragging / rollInToLoop as std::atomic flags. Audio thread reads, UI thread writes.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h" }
+  ],
+  "edges": [
+    { "id": "e.audio.lfnp",   "from": "audio",   "to": "lfnp",    "kind": "dashed" },
+    { "id": "e.lfnp.pool",    "from": "lfnp",    "to": "pool",    "kind": "solid" },
+    { "id": "e.pool.workers", "from": "pool",    "to": "workers", "kind": "solid" },
+    { "id": "e.workers.lfnp", "from": "workers", "to": "lfnp",    "kind": "dashed" },
+
+    { "id": "e.lfnp.farbot", "from": "lfnp",  "to": "farbot", "kind": "dashed" },
+    { "id": "e.lfnp.cq",     "from": "lfnp",  "to": "cq",     "kind": "dashed" },
+    { "id": "e.pool.lws",    "from": "pool",  "to": "lws",    "kind": "dashed" },
+    { "id": "e.pool.crill",  "from": "pool",  "to": "crill",  "kind": "dashed" },
+
+    { "id": "e.audio.fifo",   "from": "audio",   "to": "fifo",    "kind": "dotted" },
+    { "id": "e.disk.fifo",    "from": "disk",    "to": "fifo",    "kind": "dotted" },
+    { "id": "e.audio.midiQ",  "from": "audio",   "to": "midiQ",   "kind": "dotted" },
+    { "id": "e.midiQ.midi",   "from": "midiQ",   "to": "midiTim", "kind": "dotted" },
+    { "id": "e.ui.vt",        "from": "msg",     "to": "vt",      "kind": "dashed" },
+    { "id": "e.vt.audio",     "from": "vt",      "to": "audio",   "kind": "dotted" },
+    { "id": "e.ui.pending",   "from": "uiThread","to": "pending", "kind": "dashed" },
+    { "id": "e.pending.audio","from": "pending", "to": "audio",   "kind": "dotted" },
+    { "id": "e.audio.async",  "from": "audio",   "to": "async",   "kind": "dotted" },
+    { "id": "e.async.msg",    "from": "async",   "to": "msg",     "kind": "dashed" },
+    { "id": "e.link.atomics", "from": "linkThr", "to": "atomics", "kind": "dashed" },
+    { "id": "e.atomics.audio","from": "atomics", "to": "audio",   "kind": "dotted" },
+
+    { "id": "e.audio.ssl",    "from": "audio",   "to": "ssl",     "kind": "dashed" },
+    { "id": "e.seqlock.audio","from": "seqlock", "to": "audio",   "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["audio"],
+      "title": "The audio thread is a contract",
+      "description": "Everything on this diagram exists because the audio callback thread is not allowed to lock, allocate, or block. Every bridge to another thread is a queue, an atomic, or an async updater — never a mutex held across a block boundary. This is the fixed point; the rest of the engine bends around it." },
+    { "num": 2, "nodes": ["pool"],
+      "title": "Six thread-pool strategies, no default",
+      "description": "ThreadPoolStrategy enumerates six options (CV / real-time / hybrid / semaphore / lightweight-sem / lightweight-sem-hybrid). The engine doesn't pick — embedders do — because idle-CPU vs wake-up-latency is a different tradeoff on a phone, a laptop, and a render farm. The 'hybrid' strategies contain the hard-won tuning." },
+    { "num": 3, "nodes": ["farbot", "cq", "lws", "crill", "rig", "rpm", "choc"],
+      "title": "A toolkit, not a homegrown library",
+      "description": "Seven third-party libraries are used to keep the audio thread quiet — farbot, moodycamel's concurrentqueue + lightweightsemaphore, crill, rigtorp SPSC, rpmalloc, choc. That's significant external surface, but rolling any of these in-house has burned other DAWs. Using published, audited libraries is the right call here." },
+    { "num": 4, "nodes": ["pending", "atomics"],
+      "title": "UI-to-audio is a request, not a command",
+      "description": "When the UI wants to move the playhead it does not reach into the audio thread. It calls postPosition (on EditPlaybackContext), and the audio thread consumes the pending change at the start of its next block. Similarly, Link-driven tempo lands in atomic PlayHead fields the audio thread reads. The asymmetry is deliberate: the audio thread is sovereign over WHEN a change takes effect." }
+  ],
+  "flows": [
+    { "id": "graph-sched",
+      "label": "Per-block graph scheduling",
+      "description": "Audio callback calls LockFreeMultiThreadedNodePlayer.process(). The player dispatches ready sub-DAGs to worker threads through its ThreadPoolCreator-backed pool; workers signal completion; the callback thread assembles the root.",
+      "edges": ["e.audio.lfnp", "e.lfnp.pool", "e.pool.workers", "e.workers.lfnp"] },
+    { "id": "ui-to-audio",
+      "label": "UI → audio bridges",
+      "description": "UI mutations reach the audio thread through ValueTree listeners (setting flags) and through postPosition for seek requests. Link updates arrive through atomics on PlayHead.",
+      "edges": ["e.ui.vt", "e.vt.audio", "e.ui.pending", "e.pending.audio", "e.link.atomics", "e.atomics.audio"] },
+    { "id": "audio-to-outside",
+      "label": "Audio → elsewhere",
+      "description": "Audio thread talks to disk through AudioFifo, to MIDI hardware through MidiNoteDispatcher's queue, and to the UI through juce::AsyncUpdater.",
+      "edges": ["e.audio.fifo", "e.disk.fifo", "e.audio.midiQ", "e.midiQ.midi", "e.audio.async", "e.async.msg"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

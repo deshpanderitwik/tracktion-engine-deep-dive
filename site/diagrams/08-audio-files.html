@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Audio files &amp; time-stretch — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="07-midi.html">prev</a>
+    <a href="09-threading.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">08 · audio files &amp; time-stretch</div>
+    <h1>Audio files &amp; time-stretch</h1>
+    <p class="lede">
+      How sample data moves from disk into a playing graph.
+      <code>AudioFile</code> is the identity; <code>AudioFileCache</code>
+      is the shared pool of readers; <code>AudioFileManager</code>
+      owns the whole subsystem. Behind them sit a format stack, a
+      proxy generator, and a pluggable time-stretch library.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: file, cache, reader, stretcher</h2>
+    <p>
+      Every audio clip in a Tracktion Edit points at a file. But a
+      pointing-at is not a reading-from. The engine separates the
+      <em>identity</em> of a file (<code>AudioFile</code> — a hashable
+      wrapper around a <code>juce::File</code> plus its
+      <code>AudioFileInfo</code>) from the act of <em>reading</em>
+      it, which is done through a shared <code>AudioFileCache</code>.
+      When a <code>WaveNode</code> needs samples at playback time it
+      does not open the file; it asks the cache for a reader.
+    </p>
+    <p>
+      The cache returns <code>Reader</code> handles backed by
+      <code>BufferedFileReader</code> / <code>BufferedAudioReader</code>
+      that stream ahead on a background thread and hand out blocks
+      via a lock-free <code>AudioFifo</code>. If the reader isn't
+      ready yet (seek, cold cache), a <code>FallbackReader</code>
+      hands back silence so the audio callback never blocks. Behind
+      the cache sits the <code>AudioFileManager</code>, an engine-owned
+      object that tracks open files, invalidates entries when they
+      change on disk, and manages the thumbnail cache.
+    </p>
+
+    <h2>Implementation: layers, top to bottom</h2>
+    <p>
+      At the top: <code>AudioFile</code> and <code>AudioFileInfo</code>
+      (sample rate, length, channels, metadata). Immutable value
+      types. Equality is file-path-based. This is what clips store.
+    </p>
+    <p>
+      Under that: <code>AudioFileManager</code>, which extends
+      <code>juce::AsyncUpdater</code>, and its partner
+      <code>AudioFileCache</code>. Together they own the pool of live
+      readers. The manager hands out <code>LoopInfo</code>
+      (beat-markers and BPM for loopable files),
+      <code>AudioProxyGenerator</code> tasks (generate down-sampled
+      proxies for slow-disk files on a background thread), and the
+      <code>RecordingThumbnailManager</code> /
+      <code>SmartThumbnail</code> pair that drive the waveform UI.
+    </p>
+    <p>
+      Under that: the format layer.
+      <code>AudioFormatManager</code> wraps JUCE's built-in formats
+      (WAV, AIFF, FLAC, Ogg) and adds Tracktion-specific ones:
+      <code>FFmpegEncoderAudioFormat</code> (MP4/AAC export via
+      ffmpeg), <code>FloatAudioFileFormat</code> (the engine's own
+      lossless intermediate), <code>LAMEManager</code> (MP3 export
+      via LAME — also its own class because LAME is loaded
+      dynamically), <code>RexFileFormat</code> (Propellerhead REX
+      slices), <code>MemoryMappedFileReader</code> for mmap-backed
+      fast access.
+    </p>
+    <p>
+      To the side: the time-stretch subsystem, which lives in its own
+      directory (<code>tracktion_engine/timestretch/</code>) rather
+      than under <code>audio_files/</code>.
+      <code>TimeStretcher</code> is the facade; it dispatches to one
+      of several licensed libraries (Elastique, RubberBand,
+      SoundTouch) controlled by compile-time flags
+      (<code>TRACKTION_ENABLE_TIMESTRETCH_*</code>).
+      <code>ReadAheadTimeStretcher</code> is the read-ahead wrapper
+      that <code>TimeStretchingWaveNode</code> uses at playback —
+      this is the one <code>CreateNodeParams::readAheadTimeStretchNodes</code>
+      from diagram 4 refers to, still flagged "TEMPORARY" in the
+      source. <code>BeatDetect</code> and <code>TempoDetect</code>
+      are the analysis side: detecting tempo and beat markers when a
+      file is imported.
+    </p>
+
+    <h2>Tradeoff: readers are a pool, not per-clip</h2>
+    <p>
+      A naive design would give each <code>WaveNode</code> its own
+      <code>AudioFormatReader</code>. Sharing through a cache
+      trades simplicity for memory and disk-handle savings: 20 clips
+      of the same loop open one reader, not 20. The cost is
+      synchronisation — the cache has to manage contention for its
+      read-ahead buffers across workers. And the "reader isn't ready"
+      fallback path exists because the cache cannot always have fresh
+      samples at the moment an audio block needs them. Getting that
+      failure mode to return silence instead of blocking is what
+      keeps a seek from glitching the audio thread.
+    </p>
+    <p>
+      Time-stretch pluralism is the other big tradeoff. Three
+      libraries with different quality/CPU/license profiles are
+      supported through a common <code>Mode</code> enum. Embedders
+      pick which to ship via compile flags. This is good for users
+      (choose your licence story) and inconvenient for reading —
+      whether a given build even has time-stretch at all depends on
+      macros.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      The proxy-generator path
+      (<code>AudioProxyGenerator</code>) predates modern SSDs; for an
+      NVMe-backed session it is likely wasted work. Does the engine
+      have a way to opt out cleanly, or does it always generate
+      proxies? Worth checking when writing diagram 10 (recording),
+      since that's where proxies interact with freeze.
+    </p>
+    <p class="note">
+      Notable omission: the diagram does not cover the editor-side
+      waveform caches in detail. <code>SmartThumbnail</code> and
+      <code>RecordingThumbnailManager</code> are named but their
+      lifecycle belongs in a UI-centric doc, not the engine core.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "id",      "label": "IDENTITY (per-clip)",    "height": 110 },
+    { "id": "mgmt",    "label": "MANAGER & CACHE",        "height": 120 },
+    { "id": "stream",  "label": "STREAMING READERS",      "height": 120 },
+    { "id": "format",  "label": "FORMAT STACK",           "height": 210 },
+    { "id": "stretch", "label": "TIME-STRETCH",           "height": 200 },
+    { "id": "node",    "label": "GRAPH CONSUMER",         "height": 100 }
+  ],
+  "nodes": [
+    { "id": "af",     "lane": "id", "col": 1, "label": "AudioFile",
+      "purpose": "Immutable value wrapping juce::File + AudioFileInfo (sample rate, length, channels, metadata). Equality by path. This is what a WaveAudioClip stores.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFile.h" },
+    { "id": "afi",    "lane": "id", "col": 3, "label": "AudioFileInfo",
+      "purpose": "POD descriptor: sample rate, bits/sample, length, channels, loop markers, BPM if known. Populated by the format layer on first open.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFile.h" },
+    { "id": "loop",   "lane": "id", "col": 5, "label": "LoopInfo",
+      "purpose": "Loop-specific metadata: tempo, beat markers, root note, time-signature. Drives elastic stretching when a clip is assigned to a different tempo than its native one.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_LoopInfo.h" },
+
+    { "id": "afm",    "lane": "mgmt", "col": 0, "label": "AudioFileManager",
+      "purpose": "Engine-owned (extends juce::AsyncUpdater). Tracks open files, invalidates cache entries on disk changes, owns thumbnail cache + proxy generator.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFileManager.h" },
+    { "id": "afc",    "lane": "mgmt", "col": 2, "label": "AudioFileCache",
+      "purpose": "Shared pool of open readers. Hands out Reader handles to WaveNodes. Keeps read-ahead buffers populated across workers.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFileCache.h" },
+    { "id": "proxy",  "lane": "mgmt", "col": 4, "label": "AudioProxyGenerator",
+      "purpose": "Background worker that generates faster-to-read proxy files (downsampled / converted format) for slow-disk originals.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioProxyGenerator.h" },
+    { "id": "thumb",  "lane": "mgmt", "col": 5, "label": "SmartThumbnail",
+      "purpose": "Waveform thumbnail cache used by the editor UI. RecordingThumbnailManager handles live recording.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_SmartThumbnail.h" },
+
+    { "id": "buff",   "lane": "stream", "col": 1, "label": "BufferedAudioReader",
+      "purpose": "Read-ahead wrapper: a background thread fills a ring buffer from the real reader.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_BufferedAudioReader.h" },
+    { "id": "bfr",    "lane": "stream", "col": 3, "label": "BufferedFileReader",
+      "purpose": "File-backed read-ahead reader. Used for streaming larger files that don't fit (or shouldn't fit) in RAM.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_BufferedFileReader.h" },
+    { "id": "fifo",   "lane": "stream", "col": 5, "label": "AudioFifo",
+      "purpose": "Lock-free SPSC ring buffer for audio samples. Backs the read-ahead path so the audio thread never locks.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFifo.h" },
+
+    { "id": "fmgr",   "lane": "format", "col": 1, "label": "AudioFormatManager",
+      "purpose": "Wraps JUCE's built-in formats (WAV/AIFF/FLAC/Ogg) and registers Tracktion's additional formats.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFormatManager.h" },
+    { "id": "ffmp",   "lane": "format", "col": 3, "label": "FFmpegEncoderAudioFormat",
+      "purpose": "MP4 / AAC export via ffmpeg. Dynamically-loaded dependency.",
+      "file": "modules/tracktion_engine/audio_files/formats/tracktion_FFmpegEncoderAudioFormat.h" },
+    { "id": "fltfmt", "lane": "format", "col": 5, "label": "FloatAudioFileFormat",
+      "purpose": "Tracktion's own lossless float format, used as an intermediate for freeze/render.",
+      "file": "modules/tracktion_engine/audio_files/formats/tracktion_FloatAudioFileFormat.h" },
+    { "id": "lame",   "lane": "format", "col": 1, "row": 1, "label": "LAMEManager",
+      "purpose": "MP3 export through LAME. Its own class because LAME is loaded dynamically.",
+      "file": "modules/tracktion_engine/audio_files/formats/tracktion_LAMEManager.h" },
+    { "id": "rex",    "lane": "format", "col": 3, "row": 1, "label": "RexFileFormat",
+      "purpose": "Propellerhead REX slice support.",
+      "file": "modules/tracktion_engine/audio_files/formats/tracktion_RexFileFormat.h" },
+    { "id": "mmap",   "lane": "format", "col": 5, "row": 1, "label": "MemoryMappedFileReader",
+      "purpose": "mmap-backed reader for formats where it's viable — avoids copy overhead.",
+      "file": "modules/tracktion_engine/audio_files/formats/tracktion_MemoryMappedFileReader.h" },
+
+    { "id": "ts",     "lane": "stretch", "col": 1, "label": "TimeStretcher",
+      "purpose": "Facade over multiple time-stretch libraries. Mode enum picks Elastique, RubberBand, SoundTouch, or ARA — each behind its own compile-time flag.",
+      "file": "modules/tracktion_engine/timestretch/tracktion_TimeStretch.h" },
+    { "id": "rats",   "lane": "stretch", "col": 3, "label": "ReadAheadTimeStretcher",
+      "purpose": "Read-ahead wrapper used at playback by TimeStretchingWaveNode. Source file has 'TEMPORARY' flags — still being tuned (see diagram 4 open questions).",
+      "file": "modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h" },
+    { "id": "bd",     "lane": "stretch", "col": 5, "label": "BeatDetect",
+      "purpose": "Beat / transient detection used when importing a file to populate LoopInfo.",
+      "file": "modules/tracktion_engine/timestretch/tracktion_BeatDetect.h" },
+    { "id": "td",     "lane": "stretch", "col": 1, "row": 1, "label": "TempoDetect",
+      "purpose": "Tempo estimation used by the loop-import flow.",
+      "file": "modules/tracktion_engine/timestretch/tracktion_TempoDetect.h" },
+
+    { "id": "wn",     "lane": "node", "col": 1, "label": "WaveNode",
+      "purpose": "The graph consumer. Pulls samples from AudioFileCache each block. See diagram 4.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_WaveNode.h" },
+    { "id": "tsn",    "lane": "node", "col": 4, "label": "TimeStretchingWaveNode",
+      "purpose": "WaveNode variant that routes samples through a ReadAheadTimeStretcher before emitting.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_TimeStretchingWaveNode.h" }
+  ],
+  "edges": [
+    { "id": "e.af.afi",   "from": "af",   "to": "afi",   "kind": "solid" },
+    { "id": "e.af.loop",  "from": "af",   "to": "loop",  "kind": "dashed" },
+
+    { "id": "e.afm.afc",  "from": "afm",  "to": "afc",   "kind": "solid" },
+    { "id": "e.afm.proxy","from": "afm",  "to": "proxy", "kind": "solid" },
+    { "id": "e.afm.thumb","from": "afm",  "to": "thumb", "kind": "solid" },
+
+    { "id": "e.afc.buff", "from": "afc",  "to": "buff",  "kind": "solid" },
+    { "id": "e.buff.bfr", "from": "buff", "to": "bfr",   "kind": "dashed" },
+    { "id": "e.buff.fifo","from": "buff", "to": "fifo",  "kind": "dotted" },
+
+    { "id": "e.afc.fmgr", "from": "afc",  "to": "fmgr",  "kind": "dashed" },
+    { "id": "e.fmgr.ffmp","from": "fmgr", "to": "ffmp",  "kind": "solid" },
+    { "id": "e.fmgr.flt", "from": "fmgr", "to": "fltfmt","kind": "solid" },
+    { "id": "e.fmgr.lame","from": "fmgr", "to": "lame",  "kind": "solid" },
+    { "id": "e.fmgr.rex", "from": "fmgr", "to": "rex",   "kind": "solid" },
+    { "id": "e.fmgr.mmap","from": "fmgr", "to": "mmap",  "kind": "solid" },
+
+    { "id": "e.tsn.rats", "from": "tsn",  "to": "rats",  "kind": "dashed" },
+    { "id": "e.rats.ts",  "from": "rats", "to": "ts",    "kind": "dashed" },
+    { "id": "e.bd.loop",  "from": "bd",   "to": "loop",  "kind": "dotted" },
+    { "id": "e.td.loop",  "from": "td",   "to": "loop",  "kind": "dotted" },
+
+    { "id": "e.wn.afc",   "from": "wn",   "to": "afc",   "kind": "dashed" },
+    { "id": "e.wn.af",    "from": "wn",   "to": "af",    "kind": "dotted" },
+    { "id": "e.tsn.afc",  "from": "tsn",  "to": "afc",   "kind": "dashed" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["afc", "fifo"],
+      "title": "Readers are a shared pool, not per-clip",
+      "description": "AudioFileCache pools readers across WaveNodes. Read-ahead happens on a background thread and lands in a lock-free AudioFifo. If the audio thread asks for samples that aren't ready yet, it gets silence via a FallbackReader rather than blocking. The whole design is organised around the rule: audio thread never waits for disk." },
+    { "num": 2, "nodes": ["ts"],
+      "title": "Time-stretch is pluggable at compile time",
+      "description": "TimeStretcher::Mode picks between Elastique, RubberBand, SoundTouch, or ARA, each guarded by TRACKTION_ENABLE_TIMESTRETCH_* macros. Embedders choose which to ship based on licence story. The downside: whether a build even HAS time-stretch depends on compile flags, so reading the source doesn't tell you what's enabled." },
+    { "num": 3, "nodes": ["rats", "tsn"],
+      "title": "ReadAheadTimeStretcher is flagged TEMPORARY",
+      "description": "The source file contains 'TEMPORARY' markers, and CreateNodeParams::readAheadTimeStretchNodes (diagram 4) is a similarly-flagged knob. The realtime time-stretch path is still being tuned — treat it as live code, not settled architecture." },
+    { "num": 4, "nodes": ["fmgr", "ffmp", "lame"],
+      "title": "Some formats are load-dynamic",
+      "description": "FFmpeg and LAME are loaded at runtime, not linked. That keeps the binary distributable without dragging in their licences — but it means export paths can silently be unavailable if the shared libraries aren't present. A good microsite glossary entry: 'why is MP3 export greyed out'." }
+  ],
+  "flows": [
+    { "id": "read",
+      "label": "Playback read path",
+      "description": "A WaveNode asks the AudioFileCache for samples; the cache holds a BufferedAudioReader with a ring-buffer backed by AudioFifo; the format layer is consulted when the file is first opened.",
+      "edges": ["e.wn.afc", "e.afc.buff", "e.buff.fifo", "e.afc.fmgr"] },
+    { "id": "stretch",
+      "label": "Time-stretched read path",
+      "description": "TimeStretchingWaveNode goes through ReadAheadTimeStretcher, which in turn calls the selected TimeStretcher library for the actual pitch/time work.",
+      "edges": ["e.tsn.afc", "e.tsn.rats", "e.rats.ts"] },
+    { "id": "import",
+      "label": "Import analysis",
+      "description": "When a loopable file is imported, BeatDetect and TempoDetect populate the file's LoopInfo so clips can stretch to the Edit's tempo.",
+      "edges": ["e.bd.loop", "e.td.loop", "e.af.loop"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

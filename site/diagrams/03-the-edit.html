@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Edit — document object model — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="02-module-graph.html">prev</a>
+    <a href="04-rendering-graph.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">03 · the centerpiece</div>
+    <h1>The Edit — document object model</h1>
+    <p class="lede">
+      What an <code>Edit</code> owns, how deep the ownership tree runs,
+      and why most of it is a <code>juce::ValueTree</code>. If you
+      understand this diagram you understand the engine: every other
+      subsystem is either reading from this tree, writing to it, or
+      rebuilding itself when it changes.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: the document</h2>
+    <p>
+      An <code>Edit</code> is a song. One instance represents one
+      arrangement: its tracks and clips, its tempo map, its automation,
+      its plugin racks, its scene launcher, its MIDI and audio routing.
+      A host app can hold several <code>Edit</code> instances at once
+      (the engine tracks them in an internal <code>ActiveEdits</code>
+      registry) but from the user's point of view, one Edit is one
+      document on disk.
+    </p>
+    <p>
+      The surprising bit is that the Edit is barely a class at all.
+      Most of its fields aren't values — they're thin C++ objects that
+      wrap a <code>juce::ValueTree</code> node. The actual data lives
+      in a tree, the C++ objects are a typed view over that tree, and
+      save/load is just serializing the tree to XML. Mutations go
+      through <code>undoManager</code> so the tree is the undo scope too.
+    </p>
+
+    <h2>Implementation: Engine owns Edit, Edit owns everything else</h2>
+    <p>
+      The first row of the diagram tells the real ownership story. The
+      <code>Engine</code> does <em>not</em> hold an <code>Edit</code> by
+      value or by <code>unique_ptr</code>. The host (or whatever called
+      <code>loadEditFromFile</code>) holds the <code>Edit</code>; the
+      engine just keeps a pointer in its <code>ActiveEdits</code> struct
+      so callbacks can find live Edits by ID. That's why the
+      engine→edit edge is flagged. It looks like parent→child but it is
+      not — the arrow on a real ownership diagram would go the other
+      way.
+    </p>
+    <p>
+      Below the root row, the tree is dense and mostly orthodox: an Edit
+      owns a <code>TrackList</code>, a <code>SceneList</code>, a
+      <code>TempoSequence</code>, a <code>PitchSequence</code>, a
+      <code>MarkerManager</code>, a <code>RackTypeList</code>, a master
+      plugin list, a master volume/pan plugin, an
+      <code>AutomationRecordManager</code>, a
+      <code>ParameterChangeHandler</code>, a
+      <code>ParameterControlMappings</code>, a
+      <code>TransportControl</code>, an <code>AbletonLink</code>
+      adapter, an <code>ARADocumentHolder</code>, a
+      <code>TrackCompManager</code>, an <code>EditInputDevices</code>,
+      a <code>PluginCache</code>, a <code>GlobalMacros</code>, and a
+      <code>LaunchQuantisation</code>. Almost all of these are
+      <code>std::unique_ptr</code> members declared in <code>tracktion_Edit.h</code>
+      and constructed from slices of the Edit's state tree in the
+      constructor.
+    </p>
+
+    <h2>The ValueTree trick</h2>
+    <p>
+      Two fields in the root row carry the weight of the whole design:
+      <code>state</code> and <code>inputDeviceState</code>. Both are
+      <code>juce::ValueTree</code> members. <code>state</code> is the
+      Edit proper — tracks, clips, tempo, automation, everything the
+      user would expect to save. <code>inputDeviceState</code> is a
+      second tree, persisted alongside the first, holding per-input
+      routing and arming that's conceptually part of the Edit but is
+      kept separate because it references devices the host machine may
+      or may not have. That split is flagged. It trips up people who
+      assume there's one XML blob per Edit and then wonder where their
+      record-arming went.
+    </p>
+    <p>
+      The "Persisted in state" flow overlay traces the dotted edges
+      from the <code>state</code> tree to the subtrees it actually owns
+      on disk. The "Rebuilt per session" flow traces the ownership
+      edges from <code>Edit</code> to the transient members — the
+      <code>UndoManager</code>, <code>TransportControl</code>,
+      <code>PluginCache</code>, <code>AbletonLink</code> bridge, the
+      ARA holder, the parameter change handler, the automation recorder.
+      These are recreated every time the Edit is loaded; none of them
+      are in the saved XML.
+    </p>
+
+    <h2>What's flagged</h2>
+    <p>
+      Three things about this diagram are worth slowing down on.
+      First, the ValueTree duality: the Edit is a <code>ValueTree</code>
+      wearing a C++ hat, and there are two trees, not one. Second,
+      <code>TrackList</code> recurses — a <code>Track</code> can own a
+      <code>TrackList</code> of sub-tracks, which owns tracks that own
+      more tracklists, which is how folder and submix tracks work.
+      That's the self-loop on the arrangement lane. Third, the engine's
+      grip on the Edit is advisory, not ownership. Miss any of those
+      three and you will write code that either leaks, double-frees, or
+      tries to read a field that is only valid mid-session.
+    </p>
+    <p class="note">
+      Open question: is <code>inputDeviceState</code> really a separate
+      concept or a historical accident? It behaves like a second
+      document fragment tied to machine-local identifiers. A later
+      diagram on audio/MIDI I/O should revisit this.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "root",        "label": "ROOT",        "height": 140 },
+    { "id": "arrangement", "label": "ARRANGEMENT", "height": 200 },
+    { "id": "timing",      "label": "TIMING",      "height": 200 },
+    { "id": "routing",     "label": "ROUTING",     "height": 160 },
+    { "id": "automation",  "label": "AUTOMATION",  "height": 160 },
+    { "id": "integration", "label": "INTEGRATION", "height": 180 }
+  ],
+  "nodes": [
+    { "id": "engine", "lane": "root", "col": 0, "label": "Engine",
+      "purpose": "Process-wide singleton. Holds shared services (device manager, plugin manager, settings). Tracks live Edits in ActiveEdits but does NOT own them.",
+      "file": "modules/tracktion_engine/tracktion_engine.h" },
+    { "id": "edit", "lane": "root", "col": 3, "label": "Edit",
+      "purpose": "One Edit = one song. Owns (by unique_ptr or value) every object below this row. Subclass of Selectable; uses a juce::Timer for housekeeping.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Edit.h" },
+    { "id": "undomgr", "lane": "root", "col": 4, "label": "UndoManager",
+      "purpose": "Held by value on Edit. Every ValueTree mutation flows through it, so 'the Edit' and 'the undo scope' are the same thing.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Edit.h" },
+    { "id": "state", "lane": "root", "col": 5, "label": "state : ValueTree",
+      "purpose": "The primary state tree (IDs::EDIT root). Everything persisted about the Edit lives here. The C++ objects below are typed views over slices of this tree.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Edit.h" },
+    { "id": "instate", "lane": "root", "col": 6, "label": "inputDeviceState : ValueTree",
+      "purpose": "Second ValueTree. Holds per-input-device routing and arming. Separate from 'state' because it references machine-local device IDs.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Edit.h" },
+
+    { "id": "tracklist", "lane": "arrangement", "col": 1, "label": "TrackList",
+      "purpose": "ValueTreeObjectList<Track>. Edit owns one at the top; each Track may own another (see recursion flag).",
+      "file": "modules/tracktion_engine/model/tracks/tracktion_TrackUtils.h" },
+    { "id": "track", "lane": "arrangement", "col": 2, "label": "Track",
+      "purpose": "A track in the arrangement. Polymorphic (audio/MIDI/folder/marker/chord/tempo). Holds its own plugin list, modifiers, and optionally a sub-TrackList.",
+      "file": "modules/tracktion_engine/model/tracks/tracktion_Track.h" },
+    { "id": "clip", "lane": "arrangement", "col": 3, "row": 1, "label": "Clip",
+      "purpose": "Region on a track. Polymorphic (wave/MIDI/edit/step/arranger/chord/marker/container). Owned by the track's ClipOwner slice of state.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_Clip.h" },
+    { "id": "scenelist", "lane": "arrangement", "col": 4, "label": "SceneList",
+      "purpose": "Ableton-style clip launcher grid rows. Only populated if the Edit uses scenes.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Scene.h" },
+    { "id": "scene", "lane": "arrangement", "col": 5, "label": "Scene",
+      "purpose": "One row in the launcher grid. Owns one ClipSlot per track.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Scene.h" },
+    { "id": "clipslot", "lane": "arrangement", "col": 6, "row": 1, "label": "ClipSlot",
+      "purpose": "One cell in the launcher grid. May hold a Clip to launch.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Scene.h" },
+
+    { "id": "temposeq", "lane": "timing", "col": 1, "label": "TempoSequence",
+      "purpose": "The tempo map. Held by value on Edit. Converts between beats and seconds everywhere else in the engine.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_TempoSequence.h" },
+    { "id": "temposet", "lane": "timing", "col": 2, "label": "TempoSetting",
+      "purpose": "One BPM change on the tempo timeline.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_TempoSetting.h" },
+    { "id": "timesig", "lane": "timing", "col": 2, "row": 1, "label": "TimeSigSetting",
+      "purpose": "One time-signature change on the tempo timeline.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_TimeSigSetting.h" },
+    { "id": "pitchseq", "lane": "timing", "col": 3, "label": "PitchSequence",
+      "purpose": "Parallel to TempoSequence but for musical key. Used by pitched clips and helpers.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_PitchSequence.h" },
+    { "id": "pitchset", "lane": "timing", "col": 3, "row": 1, "label": "PitchSetting",
+      "purpose": "One key change on the pitch timeline.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_PitchSetting.h" },
+    { "id": "launchq", "lane": "timing", "col": 4, "label": "LaunchQuantisation",
+      "purpose": "Quantisation policy for the clip launcher (wait for next bar, next beat, etc).",
+      "file": "modules/tracktion_engine/model/edit/tracktion_LaunchQuantisation.h" },
+    { "id": "markermgr", "lane": "timing", "col": 5, "label": "MarkerManager",
+      "purpose": "Owns and orders the Edit's markers.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_MarkerManager.h" },
+    { "id": "marker", "lane": "timing", "col": 6, "label": "Marker",
+      "purpose": "A named position (or range) on the timeline.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_MarkerManager.h" },
+
+    { "id": "rackt", "lane": "routing", "col": 1, "label": "RackTypeList",
+      "purpose": "Owns the Edit's rack definitions (reusable sub-graphs of plugins).",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_RackType.h" },
+    { "id": "racktype", "lane": "routing", "col": 2, "label": "RackType",
+      "purpose": "One rack definition. Instances of it appear as RackInstance plugins on tracks. See diagram 6 for the duality.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_RackType.h" },
+    { "id": "masterplug", "lane": "routing", "col": 4, "label": "masterPluginList",
+      "purpose": "Plugin list applied after the track sum, before output. Separate from per-track plugin lists.",
+      "file": "modules/tracktion_engine/plugins/tracktion_PluginList.h" },
+    { "id": "masvol", "lane": "routing", "col": 5, "label": "masterVolumePlugin",
+      "purpose": "A VolumeAndPanPlugin held as a ReferenceCountedObjectPtr — the final fader stage.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_Plugins.h" },
+
+    { "id": "autorec", "lane": "automation", "col": 1, "label": "AutomationRecordManager",
+      "purpose": "Mediates live automation recording (touch/latch/write) onto AutomatableParameters across the Edit.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomationRecordManager.h" },
+    { "id": "pch", "lane": "automation", "col": 2, "label": "ParameterChangeHandler",
+      "purpose": "Fan-in for parameter change notifications. Lets subsystems subscribe once instead of walking the tree.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_ParameterChangeHandler.h" },
+    { "id": "pcm", "lane": "automation", "col": 3, "label": "ParameterControlMappings",
+      "purpose": "MIDI-CC / controller → parameter mappings scoped to this Edit.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_ParameterControlMappings.h" },
+    { "id": "macros", "lane": "automation", "col": 5, "label": "GlobalMacros",
+      "purpose": "Edit-level macro parameters. Drive plugin params via assignment, independent of tracks.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_MacroParameter.h" },
+
+    { "id": "transport", "lane": "integration", "col": 1, "label": "TransportControl",
+      "purpose": "Play/stop/record/locate/loop state. Not persisted — rebuilt at load time. See diagram 5.",
+      "file": "modules/tracktion_engine/playback/tracktion_TransportControl.h" },
+    { "id": "link", "lane": "integration", "col": 2, "label": "AbletonLink",
+      "purpose": "Bridge to the Ableton Link network clock. Pulls/pushes tempo when enabled.",
+      "file": "modules/tracktion_engine/playback/tracktion_AbletonLink.h" },
+    { "id": "ara", "lane": "integration", "col": 3, "label": "ARADocumentHolder",
+      "purpose": "Lifetime anchor for ARA-aware plugins (e.g. Melodyne) that need a document-scoped handle.",
+      "file": "modules/tracktion_engine/plugins/ARA/" },
+    { "id": "tcm", "lane": "integration", "col": 4, "label": "TrackCompManager",
+      "purpose": "Take-comping state for audio tracks. Lives with the Edit because comps persist across sessions.",
+      "file": "modules/tracktion_engine/model/tracks/tracktion_TrackCompManager.h" },
+    { "id": "eid", "lane": "integration", "col": 5, "label": "EditInputDevices",
+      "purpose": "The C++ view over inputDeviceState — per-input routing and arming for this Edit.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditInputDevices.h" },
+    { "id": "plugc", "lane": "integration", "col": 6, "label": "PluginCache",
+      "purpose": "Per-Edit cache of instantiated Plugin objects, keyed by ValueTree identity. Keeps plugin windows and state alive while the Edit is loaded.",
+      "file": "modules/tracktion_engine/plugins/tracktion_Plugin.h" }
+  ],
+  "edges": [
+    { "id": "e.engine.edit",   "from": "engine",    "to": "edit",       "kind": "solid"  },
+    { "id": "e.edit.state",    "from": "edit",      "to": "state",      "kind": "solid"  },
+    { "id": "e.edit.instate",  "from": "edit",      "to": "instate",    "kind": "solid"  },
+    { "id": "e.edit.undo",     "from": "edit",      "to": "undomgr",    "kind": "solid"  },
+
+    { "id": "e.edit.tl",       "from": "edit",      "to": "tracklist",  "kind": "solid"  },
+    { "id": "e.tl.track",      "from": "tracklist", "to": "track",      "kind": "solid"  },
+    { "id": "e.track.tl",      "from": "track",     "to": "tracklist",  "kind": "solid"  },
+    { "id": "e.track.clip",    "from": "track",     "to": "clip",       "kind": "solid"  },
+    { "id": "e.edit.scenes",   "from": "edit",      "to": "scenelist",  "kind": "solid"  },
+    { "id": "e.scenes.scene",  "from": "scenelist", "to": "scene",      "kind": "solid"  },
+    { "id": "e.scene.slot",    "from": "scene",     "to": "clipslot",   "kind": "solid"  },
+    { "id": "e.slot.clip",     "from": "clipslot",  "to": "clip",       "kind": "dashed" },
+
+    { "id": "e.edit.tempo",    "from": "edit",      "to": "temposeq",   "kind": "solid"  },
+    { "id": "e.tempo.setting", "from": "temposeq",  "to": "temposet",   "kind": "solid"  },
+    { "id": "e.tempo.sig",     "from": "temposeq",  "to": "timesig",    "kind": "solid"  },
+    { "id": "e.edit.pitch",    "from": "edit",      "to": "pitchseq",   "kind": "solid"  },
+    { "id": "e.pitch.setting", "from": "pitchseq",  "to": "pitchset",   "kind": "solid"  },
+    { "id": "e.edit.lq",       "from": "edit",      "to": "launchq",    "kind": "solid"  },
+    { "id": "e.edit.mm",       "from": "edit",      "to": "markermgr",  "kind": "solid"  },
+    { "id": "e.mm.marker",     "from": "markermgr", "to": "marker",     "kind": "solid"  },
+
+    { "id": "e.edit.rackt",    "from": "edit",      "to": "rackt",      "kind": "solid"  },
+    { "id": "e.rackt.type",    "from": "rackt",     "to": "racktype",   "kind": "solid"  },
+    { "id": "e.edit.mp",       "from": "edit",      "to": "masterplug", "kind": "solid"  },
+    { "id": "e.edit.mv",       "from": "edit",      "to": "masvol",     "kind": "solid"  },
+
+    { "id": "e.edit.autorec",  "from": "edit",      "to": "autorec",    "kind": "solid"  },
+    { "id": "e.edit.pch",      "from": "edit",      "to": "pch",        "kind": "solid"  },
+    { "id": "e.edit.pcm",      "from": "edit",      "to": "pcm",        "kind": "solid"  },
+    { "id": "e.edit.macros",   "from": "edit",      "to": "macros",     "kind": "solid"  },
+
+    { "id": "e.edit.transp",   "from": "edit",      "to": "transport",  "kind": "solid"  },
+    { "id": "e.edit.link",     "from": "edit",      "to": "link",       "kind": "solid"  },
+    { "id": "e.edit.ara",      "from": "edit",      "to": "ara",        "kind": "solid"  },
+    { "id": "e.edit.tcm",      "from": "edit",      "to": "tcm",        "kind": "solid"  },
+    { "id": "e.edit.eid",      "from": "edit",      "to": "eid",        "kind": "solid"  },
+    { "id": "e.edit.plugc",    "from": "edit",      "to": "plugc",      "kind": "solid"  },
+
+    { "id": "e.state.tl",      "from": "state",     "to": "tracklist",  "kind": "dotted" },
+    { "id": "e.state.tempo",   "from": "state",     "to": "temposeq",   "kind": "dotted" },
+    { "id": "e.state.pitch",   "from": "state",     "to": "pitchseq",   "kind": "dotted" },
+    { "id": "e.state.mm",      "from": "state",     "to": "markermgr",  "kind": "dotted" },
+    { "id": "e.state.rackt",   "from": "state",     "to": "rackt",      "kind": "dotted" },
+    { "id": "e.state.mp",      "from": "state",     "to": "masterplug", "kind": "dotted" },
+    { "id": "e.state.scenes",  "from": "state",     "to": "scenelist",  "kind": "dotted" },
+    { "id": "e.state.lq",      "from": "state",     "to": "launchq",    "kind": "dotted" },
+    { "id": "e.state.macros",  "from": "state",     "to": "macros",     "kind": "dotted" },
+    { "id": "e.state.tcm",     "from": "state",     "to": "tcm",        "kind": "dotted" },
+    { "id": "e.state.pcm",     "from": "state",     "to": "pcm",        "kind": "dotted" },
+    { "id": "e.instate.eid",   "from": "instate",   "to": "eid",        "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["state", "instate"],
+      "title": "The ValueTree is the document — and there are two of them",
+      "description": "Almost every object in the diagram is a typed view over a slice of 'state' (a juce::ValueTree). Saving the Edit is serializing 'state' to XML; undo is 'state' + UndoManager. A second tree, inputDeviceState, holds per-input-device routing separately because it references machine-local IDs. People who assume one Edit = one XML get burned when record-arming appears to vanish." },
+    { "num": 2, "nodes": ["tracklist", "track"],
+      "title": "TrackList recurses",
+      "description": "A Track may own its own TrackList (see the self-loop). That is how folder tracks and submix groupings work — they're just tracks whose sub-list contains other tracks. Any walker over the arrangement has to handle the recursion explicitly; a flat iteration silently skips everything inside a folder." },
+    { "num": 3, "nodes": ["engine", "edit"],
+      "title": "The Engine does not own the Edit",
+      "description": "The engine → edit arrow looks like ownership but is not. The engine tracks live Edits in an internal ActiveEdits struct (just pointers + IDs); the real owner is whoever called loadEditFromFile — usually a std::unique_ptr held by the host. Treating this arrow as ownership leads to double-free bugs and reasoning mistakes about lifetime." }
+  ],
+  "flows": [
+    { "id": "persisted",
+      "label": "Persisted in state",
+      "description": "Dotted edges from the state ValueTree to subtrees that survive save/load. Everything else on the diagram is rebuilt at construction time.",
+      "edges": [
+        "e.state.tl", "e.state.tempo", "e.state.pitch", "e.state.mm",
+        "e.state.rackt", "e.state.mp", "e.state.scenes", "e.state.lq",
+        "e.state.macros", "e.state.tcm", "e.state.pcm", "e.instate.eid"
+      ] },
+    { "id": "transient",
+      "label": "Rebuilt per session",
+      "description": "Ownership edges to members that are NOT in the saved XML — they exist only while the Edit is loaded. Lose track of this distinction and you'll try to persist state that cannot survive a reopen.",
+      "edges": [
+        "e.edit.undo", "e.edit.transp", "e.edit.link", "e.edit.ara",
+        "e.edit.plugc", "e.edit.pch", "e.edit.autorec"
+      ] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

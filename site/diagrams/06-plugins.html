@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plugins &amp; racks — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="05-transport.html">prev</a>
+    <a href="07-midi.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">06 · plugins &amp; racks</div>
+    <h1>Plugins &amp; racks</h1>
+    <p class="lede">
+      One abstract <code>Plugin</code> base class, four concrete
+      families that inherit it (internal effects, external hosts,
+      ARA, and routing glue), a <code>PluginManager</code> that owns
+      the registry, and a rack system that turns a sub-graph into a
+      reusable plugin.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: everything is a Plugin</h2>
+    <p>
+      The engine's plugin model is deliberately flat. One abstract
+      base — <code>Plugin</code>, in
+      <code>tracktion_engine/plugins/tracktion_Plugin.h</code> —
+      defines the contract: <code>initialise()</code>,
+      <code>deinitialise()</code>, <code>applyToBuffer()</code>,
+      plus state ownership through <code>juce::ValueTree</code>.
+      Everything a track can host inherits from it: built-in effects
+      (EQ, compressor, delay), the FourOsc synth, the external
+      plugin host wrapper, the ARA node, and — importantly — the
+      routing-and-structure pieces (VolumeAndPan, LevelMeter, AuxSend,
+      AuxReturn, RackInstance, InsertPlugin). There is no separate
+      "routing object" hierarchy; routing is just a plugin whose
+      <code>applyToBuffer</code> does something structural instead of
+      something spectral.
+    </p>
+    <p>
+      <code>PluginManager</code> owns the registry. It wraps a
+      <code>juce::AudioPluginFormatManager</code> and a
+      <code>KnownPluginList</code> for scanning disk-installed plugins
+      (VST3, AU, LV2, CLAP via JUCE formats), and it keeps a list of
+      <em>built-in types</em> that the engine ships itself — every
+      class in <code>plugins/effects/</code> and
+      <code>plugins/internal/</code> registers a
+      <code>BuiltInType</code> factory. A <code>PluginCache</code>
+      lives on each <code>Edit</code> and hands out
+      <code>Plugin::Ptr</code> instances (ref-counted) keyed by their
+      <code>EditItemID</code> in the ValueTree.
+    </p>
+
+    <h2>Implementation: the four families</h2>
+    <p>
+      <strong>Internal effects</strong>
+      (<code>plugins/effects/</code>) are the shipped DSP — Compressor,
+      Chorus, Delay, Equaliser, LowPass, PitchShift, Phaser, Reverb,
+      ToneGenerator, ImpulseResponsePlugin, LatencyPlugin,
+      FourOscPlugin (synth), MidiModifier, MidiPatchBay,
+      SamplerPlugin. Each one is a
+      <code>Plugin</code> subclass whose <code>applyToBuffer</code>
+      does its processing in-place on the buffer it's given.
+    </p>
+    <p>
+      <strong>Internal structural</strong>
+      (<code>plugins/internal/</code>) are the plugins that exist to
+      wire the graph, not transform samples: <code>VolumeAndPan</code>,
+      <code>LevelMeter</code>, <code>VCA</code>,
+      <code>AuxSend</code>/<code>AuxReturn</code>,
+      <code>RackInstance</code> (a pointer to a shared rack),
+      <code>InsertPlugin</code> (hardware insert round-trip),
+      <code>FreezePoint</code> (marks where track-freeze cuts),
+      <code>ReWirePlugin</code>, <code>TextPlugin</code>. The fact
+      these are in the same hierarchy as an EQ is what lets them
+      appear in the same plugin list UI and be serialised uniformly
+      as ValueTree children of a track.
+    </p>
+    <p>
+      <strong>External hosts</strong>
+      (<code>plugins/external/</code>) — principally
+      <code>ExternalPlugin</code> — wrap a
+      <code>juce::AudioPluginInstance</code> (the JUCE object for a
+      hosted VST3/AU/CLAP/LV2). <code>ExternalPlugin::applyToBuffer</code>
+      forwards the block to the wrapped instance and hosts its editor
+      via <code>PluginWindowState</code>. The
+      <code>PluginManager::createPluginInstance</code> callback is the
+      customisation hook — a host app can override it to use its own
+      sandboxed scanner or out-of-process plugin bridge.
+    </p>
+    <p>
+      <strong>ARA</strong> (<code>plugins/ARA/</code>) is a different
+      kind of host. An ARA-aware plugin (Melodyne, SpectralLayers)
+      sees the source audio at document scope, not per-block. The
+      engine provides <code>ARAFileReader</code>,
+      <code>ARAPluginFactory</code>, and a set of wrapper interfaces
+      that let an ARA plugin consume the Edit's clips as an ARA
+      document. The <code>ARANode</code> from diagram 4 is what sits
+      in the audio graph; this diagram shows who it talks to.
+    </p>
+    <p>
+      <strong>Racks</strong> (<code>plugins/internal/tracktion_RackType.h</code>,
+      <code>tracktion_RackInstance.h</code>) are a small but
+      interesting piece. A <code>RackType</code> holds a sub-graph of
+      other plugins — a reusable processing unit. A
+      <code>RackInstance</code> is a plugin that embeds a reference to
+      a <code>RackType</code>. Multiple tracks can point at the same
+      <code>RackType</code>; changes propagate to every instance
+      because they all share one ValueTree. At render time a
+      <code>RackInstance</code> becomes the <code>RackInstanceNode</code>
+      / <code>RackNode</code> / <code>RackReturnNode</code> trio from
+      diagram 4.
+    </p>
+
+    <h2>Tradeoff: uniform hierarchy vs. semantic flattening</h2>
+    <p>
+      Making volume, pan, metering, and aux sends into "plugins" has
+      obvious upsides: one serialisation path, one window manager, one
+      automation-parameter pipeline, one list widget. The cost is
+      ontological — a newcomer reading the code sees
+      <code>VolumeAndPanPlugin</code> and has to mentally file it
+      differently from <code>ReverbPlugin</code>, even though they're
+      sibling classes. The engine picks uniformity and pays the
+      conceptual cost. It's the right call given how much downstream
+      machinery (automation from diagram 11, freezing from diagram 10)
+      works on "a list of plugins."
+    </p>
+    <p>
+      The other tradeoff lives in <code>PluginManager::createPluginInstance</code>
+      — being a <code>std::function</code> callback rather than a
+      virtual method lets embedders inject sandboxed or
+      out-of-process instantiation without subclassing, but it also
+      means instantiation policy is not expressed in the type system,
+      so finding out how a given host instantiates plugins means
+      grepping for assignments to that function.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      The <code>airwindows</code> folder ships a copy of the Airwindows
+      collection as part of the engine itself. That's a substantial
+      third-party DSP inclusion sitting alongside
+      <code>plugins/effects/</code>. It raises a question: are those
+      exposed as built-in types on par with the native effects, or
+      only if a compile-time flag (<code>TRACKTION_AIR_WINDOWS</code>)
+      is set? The <code>PluginManager::initialiseAirWindows()</code>
+      method is guarded by that flag — worth a closer read when
+      writing the glossary.
+    </p>
+    <p class="note">
+      Notable omission: the diagram does not break down
+      <code>PluginWindowState</code> (the editor-window lifecycle) or
+      the fine details of the scanner child-process flow
+      (<code>startChildProcessPluginScan</code>). Both are UI-adjacent
+      concerns; the microsite is focused on the engine core.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "mgmt",     "label": "REGISTRY & CACHE",            "height": 110 },
+    { "id": "base",     "label": "ABSTRACT BASE",               "height": 110 },
+    { "id": "internal", "label": "INTERNAL · DSP EFFECTS",      "height": 190 },
+    { "id": "struct",   "label": "INTERNAL · ROUTING / STRUCTURE", "height": 190 },
+    { "id": "host",     "label": "HOSTED · EXTERNAL & ARA",     "height": 110 },
+    { "id": "rack",     "label": "RACK SYSTEM",                 "height": 110 }
+  ],
+  "nodes": [
+    { "id": "pm",    "lane": "mgmt", "col": 1, "label": "PluginManager",
+      "purpose": "Engine-owned registry. Wraps juce::AudioPluginFormatManager + KnownPluginList. Holds a list of BuiltInType factories for engine-native plugins. Callback createPluginInstance(description, rate, blockSize, err) is the customisation hook.",
+      "file": "modules/tracktion_engine/plugins/tracktion_PluginManager.h" },
+    { "id": "cache", "lane": "mgmt", "col": 3, "label": "PluginCache",
+      "purpose": "Per-Edit ref-counted cache. getPluginFor(EditItemID), getOrCreatePluginFor(ValueTree), createNewPlugin. Hands out Plugin::Ptr instances keyed by their ValueTree row.",
+      "file": "modules/tracktion_engine/plugins/tracktion_PluginManager.h" },
+    { "id": "list",  "lane": "mgmt", "col": 5, "label": "PluginList",
+      "purpose": "The track-level ordered list of plugins. Owns the ValueTree children for a track's plugin chain and maintains the order the graph builder walks.",
+      "file": "modules/tracktion_engine/plugins/tracktion_PluginList.h" },
+
+    { "id": "plugin","lane": "base", "col": 3, "label": "Plugin",
+      "purpose": "Abstract base. Extends Selectable, ReferenceCountedObject, Exportable, AutomatableEditItem, MacroParameterElement. Pure virtuals: initialise(PluginInitialisationInfo), deinitialise(), applyToBuffer(PluginRenderContext).",
+      "file": "modules/tracktion_engine/plugins/tracktion_Plugin.h" },
+
+    { "id": "eq",   "lane": "internal", "col": 0, "label": "Equaliser",
+      "purpose": "Built-in parametric EQ.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_Equaliser.h" },
+    { "id": "comp", "lane": "internal", "col": 1, "label": "Compressor",
+      "purpose": "Built-in compressor.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_Compressor.h" },
+    { "id": "rev",  "lane": "internal", "col": 2, "label": "Reverb",
+      "purpose": "Built-in reverb.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_Reverb.h" },
+    { "id": "del",  "lane": "internal", "col": 3, "label": "Delay",
+      "purpose": "Built-in delay.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_Delay.h" },
+    { "id": "ch",   "lane": "internal", "col": 4, "label": "Chorus",
+      "purpose": "Built-in chorus.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_Chorus.h" },
+    { "id": "ir",   "lane": "internal", "col": 5, "label": "ImpulseResponsePlugin",
+      "purpose": "Convolution reverb / cabinet-sim via IR loading.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_ImpulseResponsePlugin.h" },
+    { "id": "fo",   "lane": "internal", "col": 0, "row": 1, "label": "FourOscPlugin",
+      "purpose": "Built-in four-oscillator synth (the engine's shipped instrument).",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_FourOscPlugin.h" },
+    { "id": "samp", "lane": "internal", "col": 1, "row": 1, "label": "SamplerPlugin",
+      "purpose": "Built-in sampler.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_SamplerPlugin.h" },
+    { "id": "mm",   "lane": "internal", "col": 2, "row": 1, "label": "MidiModifier",
+      "purpose": "Built-in MIDI transform plugin (transpose, velocity scale, etc.).",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_MidiModifier.h" },
+    { "id": "lat",  "lane": "internal", "col": 4, "row": 1, "label": "LatencyPlugin",
+      "purpose": "Introduces a reported latency — used to test latency compensation.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_LatencyPlugin.h" },
+    { "id": "tone", "lane": "internal", "col": 5, "row": 1, "label": "ToneGenerator",
+      "purpose": "Built-in test-signal generator.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_ToneGenerator.h" },
+
+    { "id": "volpan","lane": "struct", "col": 0, "label": "VolumeAndPan",
+      "purpose": "The track-level volume/pan plugin. Every audio track has one by default.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_VolumeAndPan.h" },
+    { "id": "meter", "lane": "struct", "col": 1, "label": "LevelMeter",
+      "purpose": "Pass-through plugin that captures peak/RMS for UI metering.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_LevelMeter.h" },
+    { "id": "vca",   "lane": "struct", "col": 2, "label": "VCA",
+      "purpose": "Voltage-controlled-amplifier-style gain plugin used for folder/group control.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_VCA.h" },
+    { "id": "send",  "lane": "struct", "col": 3, "label": "AuxSend",
+      "purpose": "Diverts a copy of the track's audio onto an aux bus.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_AuxSend.h" },
+    { "id": "ret",   "lane": "struct", "col": 4, "label": "AuxReturn",
+      "purpose": "Receives audio from aux buses.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_AuxReturn.h" },
+    { "id": "ins",   "lane": "struct", "col": 0, "row": 1, "label": "InsertPlugin",
+      "purpose": "Hardware-insert round-trip (send out a physical output, receive back on an input).",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_InsertPlugin.h" },
+    { "id": "frz",   "lane": "struct", "col": 1, "row": 1, "label": "FreezePoint",
+      "purpose": "Marks the boundary where track-freeze renders audio to disk. See diagram 10.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h" },
+    { "id": "rw",    "lane": "struct", "col": 2, "row": 1, "label": "ReWirePlugin",
+      "purpose": "ReWire-protocol integration (legacy sync/audio bridge).",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_ReWirePlugin.h" },
+    { "id": "txt",   "lane": "struct", "col": 3, "row": 1, "label": "TextPlugin",
+      "purpose": "A non-processing plugin that holds a text note in the track chain.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_TextPlugin.h" },
+
+    { "id": "ext",   "lane": "host", "col": 1, "label": "ExternalPlugin",
+      "purpose": "Wraps a juce::AudioPluginInstance (VST3/AU/CLAP/LV2). applyToBuffer forwards to the hosted instance. Editor managed via PluginWindowState.",
+      "file": "modules/tracktion_engine/plugins/external/tracktion_ExternalPlugin.h" },
+    { "id": "ara",   "lane": "host", "col": 4, "label": "ARAPluginFactory",
+      "purpose": "ARA integration: exposes the Edit's clips to an ARA-aware plugin as a document. Pairs with the ARANode from diagram 4.",
+      "file": "modules/tracktion_engine/plugins/ARA/tracktion_ARAPluginFactory.h" },
+
+    { "id": "rt",    "lane": "rack", "col": 2, "label": "RackType",
+      "purpose": "A reusable sub-graph of plugins. Multiple RackInstances can share one RackType.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_RackType.h" },
+    { "id": "ri",    "lane": "rack", "col": 4, "label": "RackInstance",
+      "purpose": "Track-side plugin that points at a shared RackType. Becomes a RackInstanceNode at render time.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_RackInstance.h" }
+  ],
+  "edges": [
+    { "id": "e.pm.cache",  "from": "pm",    "to": "cache", "kind": "dashed" },
+    { "id": "e.cache.list","from": "cache", "to": "list",  "kind": "dashed" },
+
+    { "id": "e.eq.p",   "from": "eq",   "to": "plugin", "kind": "solid" },
+    { "id": "e.comp.p", "from": "comp", "to": "plugin", "kind": "solid" },
+    { "id": "e.rev.p",  "from": "rev",  "to": "plugin", "kind": "solid" },
+    { "id": "e.del.p",  "from": "del",  "to": "plugin", "kind": "solid" },
+    { "id": "e.ch.p",   "from": "ch",   "to": "plugin", "kind": "solid" },
+    { "id": "e.ir.p",   "from": "ir",   "to": "plugin", "kind": "solid" },
+    { "id": "e.fo.p",   "from": "fo",   "to": "plugin", "kind": "solid" },
+    { "id": "e.samp.p", "from": "samp", "to": "plugin", "kind": "solid" },
+    { "id": "e.mm.p",   "from": "mm",   "to": "plugin", "kind": "solid" },
+    { "id": "e.lat.p",  "from": "lat",  "to": "plugin", "kind": "solid" },
+    { "id": "e.tone.p", "from": "tone", "to": "plugin", "kind": "solid" },
+
+    { "id": "e.volpan.p","from": "volpan","to": "plugin", "kind": "solid" },
+    { "id": "e.meter.p", "from": "meter", "to": "plugin", "kind": "solid" },
+    { "id": "e.vca.p",   "from": "vca",   "to": "plugin", "kind": "solid" },
+    { "id": "e.send.p",  "from": "send",  "to": "plugin", "kind": "solid" },
+    { "id": "e.ret.p",   "from": "ret",   "to": "plugin", "kind": "solid" },
+    { "id": "e.ins.p",   "from": "ins",   "to": "plugin", "kind": "solid" },
+    { "id": "e.frz.p",   "from": "frz",   "to": "plugin", "kind": "solid" },
+    { "id": "e.rw.p",    "from": "rw",    "to": "plugin", "kind": "solid" },
+    { "id": "e.txt.p",   "from": "txt",   "to": "plugin", "kind": "solid" },
+
+    { "id": "e.ext.p",   "from": "ext",   "to": "plugin", "kind": "solid" },
+    { "id": "e.ara.p",   "from": "ara",   "to": "plugin", "kind": "dashed" },
+
+    { "id": "e.ri.p",    "from": "ri",    "to": "plugin", "kind": "solid" },
+    { "id": "e.ri.rt",   "from": "ri",    "to": "rt",     "kind": "dashed" },
+
+    { "id": "e.pm.ext",  "from": "pm",    "to": "ext",    "kind": "dashed" },
+    { "id": "e.send.ret","from": "send",  "to": "ret",    "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["plugin", "volpan", "send", "ri"],
+      "title": "Routing is a plugin, too",
+      "description": "VolumeAndPan, LevelMeter, AuxSend/Return, RackInstance, InsertPlugin all inherit from the same Plugin base as Reverb and Compressor. There is no separate routing-object hierarchy — structural pieces and DSP pieces are siblings. That is what lets the track plugin list, the automation pipeline, and the serialisation path treat them uniformly." },
+    { "num": 2, "nodes": ["pm", "ext"],
+      "title": "Instantiation policy is a std::function",
+      "description": "PluginManager::createPluginInstance is a std::function, not a virtual method. Host applications replace it to inject out-of-process loading, sandboxing, or a custom scanner. The upside is flexibility without subclassing; the downside is that policy is not visible in the type system — you have to grep for who assigns it." },
+    { "num": 3, "nodes": ["rt", "ri"],
+      "title": "Rack = shared sub-graph",
+      "description": "One RackType can be pointed at by many RackInstances across tracks. They literally share a ValueTree — edit the RackType once and every instance updates. This is the engine's only first-class mechanism for reusable multi-plugin chains and is why racks got their own trio of Node subclasses (diagram 4, flag 3)." },
+    { "num": 4, "nodes": ["ara"],
+      "title": "ARA is a different kind of host",
+      "description": "ARA-aware plugins (Melodyne, SpectralLayers) see the source audio at document scope, not per-block. ARAPluginFactory and the ARA wrapper interfaces expose the Edit's clips as an ARA document; the graph-side counterpart is ARANode. The engine treats ARA as a first-class host path — parallel to, not a subclass of, ExternalPlugin." }
+  ],
+  "flows": [
+    { "id": "create",
+      "label": "Plugin creation path",
+      "description": "A track asks its PluginCache for a plugin keyed by ValueTree. PluginCache consults PluginManager; PluginManager either hands back a BuiltInType factory result or calls createPluginInstance to load an external plugin. Result is inserted into the PluginList.",
+      "edges": ["e.pm.cache", "e.cache.list", "e.pm.ext"] },
+    { "id": "inherit",
+      "label": "Everything inherits Plugin",
+      "description": "Every concrete plugin — native effects, structural/routing, external hosts, rack instance — inherits from the same Plugin abstract base.",
+      "edges": [
+        "e.eq.p", "e.comp.p", "e.rev.p", "e.del.p", "e.ch.p", "e.ir.p",
+        "e.fo.p", "e.samp.p", "e.mm.p", "e.lat.p", "e.tone.p",
+        "e.volpan.p", "e.meter.p", "e.vca.p", "e.send.p", "e.ret.p",
+        "e.ins.p", "e.frz.p", "e.rw.p", "e.txt.p",
+        "e.ext.p", "e.ri.p"
+      ] },
+    { "id": "rack-share",
+      "label": "Rack sharing",
+      "description": "A RackInstance plugin on a track references a shared RackType. Multiple RackInstances can point at the same RackType — edits propagate via the shared ValueTree.",
+      "edges": ["e.ri.rt"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

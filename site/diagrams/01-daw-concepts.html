@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DAW conceptual map — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="../index.html">prev</a>
+    <a href="02-module-graph.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">01 · rosetta stone · concepts before code</div>
+    <h1>DAW conceptual map</h1>
+    <p class="lede">
+      Every mature DAW has roughly these ten concepts. The names differ
+      between DAWs; the concepts don't. This diagram is the vocabulary for
+      every later page — open it, read it, and come back when a later
+      diagram uses a word you haven't met yet.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+
+    <h2>Ten nouns</h2>
+    <p>
+      A DAW is software that lets one person play the role of an entire
+      recording studio. That ambition decomposes into roughly ten
+      concepts. At the top is the <strong>Edit</strong>: one document,
+      one musical piece. Every other concept on this page lives inside
+      an Edit. It holds a tree of <strong>Tracks</strong>, where each
+      track is a lane for one instrument or one voice. A track owns
+      <strong>Clips</strong> — the bits of music arranged along the
+      timeline. A clip is either a reference into an
+      <strong>AudioFile</strong> (the WAV of a guitar take) or a bag of
+      MIDI notes (a programmed drum pattern). <strong>Scenes</strong>
+      group clips across tracks so you can launch them together,
+      Ableton-style. <strong>Markers</strong> pin points on the timeline.
+      A <strong>TempoSequence</strong> says how fast the music is going
+      at any point along its length. <strong>Automation</strong> is any
+      parameter value that changes over time.
+    </p>
+
+    <h2>Describing vs. playing</h2>
+    <p>
+      The Edit <em>describes</em>. The Edit does not <em>play</em>. For
+      that you need the <strong>Transport</strong>: play, stop, record,
+      loop. Transport owns a <strong>PlayHead</strong> — the cursor that
+      says "the current time is here, moving this fast." When Transport
+      starts, the engine builds an <strong>AudioGraph</strong>: a
+      directed graph of processing nodes derived from the Edit's
+      structure. Audio samples flow block-by-block through that graph
+      and out to an <strong>AudioDevice</strong>. Individual
+      <strong>Plugins</strong> (an EQ, a reverb, a synth) are nodes in
+      this graph. A <strong>Rack</strong> is a plugin that is secretly a
+      sub-graph of other plugins — a modular synth patch living inside
+      one plugin slot.
+    </p>
+
+    <p>
+      Press play and three lanes light up at once. A single gesture
+      fires Transport (the playback lane), which schedules the
+      AudioGraph (the signal lane), which reads clip data from Tracks
+      (the arrangement lane) and emits audio to the AudioDevice (the
+      I/O lane). The <em>press play</em> flow overlay in the sidebar
+      traces that exact path. Toggle it on and you'll see which edges
+      light up — the shape of a single user gesture crossing four
+      subsystems.
+    </p>
+
+    <h2>The one interesting tradeoff</h2>
+    <p>
+      Two models run at the same time. The <em>arrangement</em> model
+      is offline and editable — you can nudge a clip or change a tempo
+      with no audio implications until the next block. The
+      <em>graph</em> model is realtime and strict — the audio thread
+      may not allocate, lock, or block, ever. Turning the first into
+      the second, safely, on every change, sample-accurately, is the
+      single hardest problem in the engine. Almost every later diagram
+      is a detail of that translation.
+    </p>
+
+    <h2>What's flagged</h2>
+    <p>
+      The red circles in the sidebar mark places where a concept on
+      this diagram hides a complication that deserves its own later
+      page. Rack's dual identity (flag 2) comes back as diagram 6.
+      Automation's offline-to-realtime boundary (flag 3) is diagram 11.
+      The split between a DAG scheduler and engine-specific nodes
+      (flag 4) drives diagrams 2 and 4. And nested Edits (flag 1) — a
+      Clip that is itself an Edit — is a recursion that shows up
+      wherever "freeze" or "bounce" appears in the source.
+    </p>
+
+    <p class="note">
+      A word on the diagram grammar you're seeing for the first time.
+      <strong>Solid</strong> edges are ownership ("Edit contains
+      Tracks"). <strong>Dashed</strong> edges are runtime messages
+      ("Transport tells PlayHead to start"). <strong>Dotted</strong>
+      edges are data flows ("audio samples from Clip move through the
+      graph"). Every later diagram keeps those three meanings and those
+      three meanings only.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "arrangement", "label": "ARRANGEMENT · the offline document", "height": 190 },
+    { "id": "transport",   "label": "TRANSPORT · runs at playback time",  "height": 140 },
+    { "id": "signal",      "label": "SIGNAL · audio built block-by-block","height": 140 },
+    { "id": "io",          "label": "I/O · where data enters and leaves", "height": 140 }
+  ],
+  "nodes": [
+    { "id": "edit",         "lane": "arrangement", "col": 0, "label": "Edit",
+      "purpose": "The document. One Edit is one musical piece. Everything below lives inside one of these.",
+      "file": "model/edit/tracktion_Edit.h" },
+
+    { "id": "temposeq",     "lane": "arrangement", "col": 1, "row": 0, "label": "TempoSequence",
+      "purpose": "How fast the music is going at any point. Maps between seconds, beats, and bars.",
+      "file": "model/edit/tracktion_TempoSequence.h" },
+    { "id": "marker",       "lane": "arrangement", "col": 1, "row": 1, "label": "Marker",
+      "purpose": "A pin on the timeline. Loop points, cue points, arrangement markers.",
+      "file": "model/edit/tracktion_MarkerManager.h" },
+
+    { "id": "track",        "lane": "arrangement", "col": 2, "label": "Track",
+      "purpose": "A lane for one instrument or voice. Owns its clips and its plugin chain.",
+      "file": "model/tracks/tracktion_Track.h" },
+
+    { "id": "clip",         "lane": "arrangement", "col": 3, "label": "Clip",
+      "purpose": "A piece of music sitting on the timeline. Audio, MIDI, step, edit-nested, marker, chord — all clip flavours.",
+      "file": "model/clips/tracktion_Clip.h" },
+
+    { "id": "scene",        "lane": "arrangement", "col": 4, "label": "Scene",
+      "purpose": "Ableton-style horizontal grouping. Launch a row of clips across many tracks with one gesture.",
+      "file": "model/edit/tracktion_Scene.h" },
+
+    { "id": "automation",   "lane": "arrangement", "col": 5, "label": "Automation",
+      "purpose": "Any parameter value that changes over time. Lives in the Edit; evaluated in the graph.",
+      "file": "model/automation/tracktion_AutomationCurve.h" },
+
+    { "id": "transport",    "lane": "transport",   "col": 0, "label": "Transport",
+      "purpose": "Play, stop, record, loop. The user's remote control for time.",
+      "file": "playback/tracktion_TransportControl.h" },
+    { "id": "playhead",     "lane": "transport",   "col": 1, "label": "PlayHead",
+      "purpose": "The cursor. Current position, current direction, current speed.",
+      "file": "tracktion_graph/tracktion_PlayHead.h" },
+    { "id": "record",       "lane": "transport",   "col": 2, "label": "Record",
+      "purpose": "The other half of Transport — captures incoming audio or MIDI into a new clip.",
+      "file": "model/automation/tracktion_AutomationRecordManager.h" },
+    { "id": "render",       "lane": "transport",   "col": 3, "label": "Render",
+      "purpose": "Offline render. Same graph as playback, run faster-than-realtime into a file.",
+      "file": "model/export/tracktion_Renderer.h" },
+
+    { "id": "audiograph",   "lane": "signal",      "col": 2, "label": "AudioGraph",
+      "purpose": "A DAG of Node objects processed per audio block. Built from the Edit each time playback starts.",
+      "file": "tracktion_graph/tracktion_Node.h" },
+    { "id": "plugin",       "lane": "signal",      "col": 3, "label": "Plugin",
+      "purpose": "A processor. Internal (EQ, compressor) or external (VST/AU/CLAP). Also Racks.",
+      "file": "plugins/tracktion_Plugin.h" },
+    { "id": "rack",         "lane": "signal",      "col": 4, "label": "Rack",
+      "purpose": "A plugin whose body is a sub-graph of other plugins. Modular synth inside a single slot.",
+      "file": "plugins/internal/tracktion_RackType.h" },
+    { "id": "modifier",     "lane": "signal",      "col": 5, "label": "Modifier",
+      "purpose": "An LFO, envelope follower, or step modulator that drives plugin parameters.",
+      "file": "model/automation/tracktion_Modifier.h" },
+
+    { "id": "mididev",      "lane": "io",          "col": 1, "label": "MidiDevice",
+      "purpose": "External or virtual MIDI in/out. Keyboards, controllers, virtual ports.",
+      "file": "playback/devices/tracktion_MidiInputDevice.h" },
+    { "id": "audiodev",     "lane": "io",          "col": 2, "label": "AudioDevice",
+      "purpose": "The soundcard (or hosted driver). Where audio samples come from and go to.",
+      "file": "playback/tracktion_DeviceManager.h" },
+    { "id": "audiofile",    "lane": "io",          "col": 3, "label": "AudioFile",
+      "purpose": "A WAV/AIFF/FLAC/MP3 on disk. Source for audio clips, destination for renders.",
+      "file": "audio_files/tracktion_AudioFile.h" }
+  ],
+  "edges": [
+    { "id": "e_edit_track",  "from": "edit",       "to": "track",      "kind": "solid" },
+    { "id": "e_edit_tempo",  "from": "edit",       "to": "temposeq",   "kind": "solid" },
+    { "id": "e_edit_marker", "from": "edit",       "to": "marker",     "kind": "solid" },
+    { "id": "e_edit_scene",  "from": "edit",       "to": "scene",      "kind": "solid" },
+    { "id": "e_edit_auto",   "from": "edit",       "to": "automation", "kind": "solid" },
+    { "id": "e_track_clip",  "from": "track",      "to": "clip",       "kind": "solid" },
+    { "id": "e_track_plug",  "from": "track",      "to": "plugin",     "kind": "solid" },
+    { "id": "e_rack_plug",   "from": "rack",       "to": "plugin",     "kind": "solid" },
+    { "id": "e_clip_file",   "from": "clip",       "to": "audiofile",  "kind": "solid" },
+
+    { "id": "e_trans_play",  "from": "transport",  "to": "playhead",   "kind": "dashed" },
+    { "id": "e_trans_graph", "from": "transport",  "to": "audiograph", "kind": "dashed" },
+    { "id": "e_auto_plug",   "from": "automation", "to": "plugin",     "kind": "dashed" },
+    { "id": "e_mod_plug",    "from": "modifier",   "to": "plugin",     "kind": "dashed" },
+
+    { "id": "e_clip_graph",  "from": "clip",       "to": "audiograph", "kind": "dotted" },
+    { "id": "e_graph_dev",   "from": "audiograph", "to": "audiodev",   "kind": "dotted" },
+    { "id": "e_dev_record",  "from": "audiodev",   "to": "record",     "kind": "dotted" },
+    { "id": "e_record_clip", "from": "record",     "to": "clip",       "kind": "dotted" },
+    { "id": "e_midi_graph",  "from": "mididev",    "to": "audiograph", "kind": "dotted" },
+    { "id": "e_render_file", "from": "render",     "to": "audiofile",  "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["clip"],
+      "title": "A Clip can contain an Edit",
+      "description": "An EditClip is a Clip whose content is itself an Edit. Nested Edits underlie freeze tracks, bounced arrangements, and EditClipRenderJob. The recursion is load-bearing — diagrams 3 and 12 come back to it." },
+    { "num": 2, "nodes": ["rack", "plugin"],
+      "title": "Rack is dual-role",
+      "description": "A Rack is a Plugin on its track's chain AND a sub-graph of other Plugins. Two identities, one object. Diagram 6 takes this apart." },
+    { "num": 3, "nodes": ["automation", "plugin"],
+      "title": "Automation crosses the offline→realtime boundary",
+      "description": "Automation data lives in the Edit (offline) but is evaluated per audio block (realtime). That boundary is where most automation bugs live. Diagram 11." },
+    { "num": 4, "nodes": ["audiograph"],
+      "title": "AudioGraph is two things in the code",
+      "description": "Conceptually one box. In source it's a generic DAG scheduler (tracktion_graph) plus a large set of engine-aware node classes (tracktion_engine/playback/graph). Diagrams 2 and 4 take this split apart." }
+  ],
+  "flows": [
+    { "id": "press-play",
+      "label": "Press play",
+      "description": "A single user gesture crosses all four lanes: Transport starts the PlayHead and schedules the AudioGraph, which reads Clip data and writes samples to the AudioDevice.",
+      "edges": ["e_trans_play", "e_trans_graph", "e_clip_graph", "e_graph_dev"] },
+    { "id": "record-audio",
+      "label": "Record audio",
+      "description": "Audio from the device becomes a new Clip on a Track. Same I/O nodes as playback, data moving the other way.",
+      "edges": ["e_dev_record", "e_record_clip"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

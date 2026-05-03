@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Automation, modifiers &amp; macros — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="10-recording-comping.html">prev</a>
+    <a href="12-rendering.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">11 · automation, modifiers &amp; macros</div>
+    <h1>Automation, modifiers &amp; macros</h1>
+    <p class="lede">
+      Every knob that can move is an <code>AutomatableParameter</code>.
+      Four sources can move it: a curve on the timeline, a modifier
+      (LFO / envelope / step), a macro parameter, or an external
+      controller via MIDI-learn or the control-surface layer.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: one parameter, many drivers</h2>
+    <p>
+      The central type is <code>AutomatableParameter</code>, a
+      ref-counted object that wraps a single scalar value (volume,
+      filter cutoff, plugin parameter) plus the machinery for
+      reading/writing it automatically. Everything that can host
+      parameters extends <code>AutomatableEditItem</code> —
+      <code>Plugin</code>, <code>Modifier</code>, clip effects, track
+      itself. Parameters are discoverable through an
+      <code>AutomatableParameterTree</code> attached to each item.
+    </p>
+    <p>
+      Four things drive a parameter. <em>Automation curves</em> —
+      <code>AutomationCurve</code> inside an
+      <code>AutomationCurveList</code> — are timeline-aligned,
+      breakpoint-based value streams. <em>Modifiers</em> are
+      live-running value sources (LFO, envelope follower, step
+      sequencer, random, breakpoint oscillator, MIDI tracker) that
+      output samples each block. <em>Macro parameters</em> are
+      user-created parameters that can themselves be mapped to any
+      other parameter — one knob controlling many. <em>External
+      control</em> arrives as MIDI (MIDI-learn) or from a
+      control-surface handler; both resolve to assignments in
+      <code>ParameterControlMappings</code>.
+    </p>
+
+    <h2>Implementation: sources, modes, and the recording path</h2>
+    <p>
+      Curves are the familiar one. An
+      <code>AutomationCurveList</code> lives under an
+      <code>AutomatableEditItem</code>; each curve targets one
+      parameter. Values are read via
+      <code>AutomationIterator</code>, which walks breakpoints in time
+      order during process(). <code>AutomationMode</code> governs
+      <em>write</em> behaviour during recording: Read, Touch, Latch,
+      Write — same semantics as other DAWs.
+      <code>AutomationRecordManager</code> captures parameter moves
+      made by the user (or by external MIDI) while transport is
+      recording, applying the chosen mode and folding new breakpoints
+      into the curve on stop.
+    </p>
+    <p>
+      Modifiers are the interesting piece. A
+      <code>Modifier</code> is an <code>AutomatableEditItem</code>
+      too — its output value can itself be automated — and it sits in
+      a track's <code>ModifierList</code> alongside plugins. At the
+      graph level a modifier becomes a
+      <code>ModifierNode</code> (diagram 4); upstream of that, its
+      value drives parameter targets it's been assigned to. Every
+      shipped modifier type
+      (<code>LFOModifier</code>, <code>EnvelopeFollowerModifier</code>,
+      <code>StepModifier</code>, <code>RandomModifier</code>,
+      <code>BreakpointOscillatorModifier</code>,
+      <code>MIDITrackerModifier</code>) implements the same interface
+      — take time, emit value. <code>ModifierTimer</code> is the
+      shared clock abstraction they all use.
+    </p>
+    <p>
+      Macros: a <code>MacroParameter</code> is itself an
+      <code>AutomatableParameter</code>. A
+      <code>MacroParameterList</code> on any
+      <code>MacroParameterElement</code> (which
+      <code>Plugin</code> already is — see diagram 6) exposes them.
+      That means macros compose: a macro can be automated by a curve,
+      modulated by a modifier, driven by MIDI-learn, and it in turn
+      drives other parameters. The composition is unlimited in
+      principle.
+    </p>
+    <p>
+      External control comes through two classes.
+      <code>MidiLearnState</code> plus <code>MidiAssignable</code>
+      capture "learn this knob, map it to that incoming CC";
+      <code>ParameterControlMappings</code> holds persistent
+      assignments — control-surface IDs and MIDI CCs both resolve to
+      the same assignment store. <code>ParameterChangeHandler</code>
+      is the callback point where external changes arrive and fan
+      out to the target parameters.
+    </p>
+
+    <h2>Tradeoff: uniform abstraction, many paths through it</h2>
+    <p>
+      Making every live value source — curve, modifier, macro,
+      external — route through the same
+      <code>AutomatableParameter</code> write path is what allows
+      the UI to show automation lanes for modifier outputs, for
+      macros, for everything. The downside is that the rules for
+      which source wins at any given moment
+      (<code>AutomationMode</code>, touch state, modifier assignment,
+      active macro) are not trivially explained. Most of the time
+      only one source is active; the rules exist for the corner
+      cases. The code pays a readability cost to make the feature
+      behave sensibly when users combine them.
+    </p>
+    <p>
+      The <em>AutomationIterator</em> design — walking breakpoints in
+      block order rather than evaluating each block independently —
+      is the right call for realtime: it lets the process() pull next
+      values cheaply without searching the curve. It does mean seeks
+      need a seek-path on the iterator (which exists) and that curves
+      edited mid-playback need cache invalidation (also exists).
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      How does modifier output value get into parameters when the
+      target parameter is on a plugin whose <code>ModifierNode</code>
+      is processed after the consumer in the DAG? The
+      dependency ordering must be resolved at graph-build time
+      (<code>createNodeForEdit</code>), but the exact policy for
+      forward-only modulation isn't obvious from the headers.
+    </p>
+    <p class="note">
+      Notable omission: the diagram does not enumerate every Modifier
+      subclass visually — six exist but they all share the same
+      edges. Shown as one group to keep the lane readable.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "host",    "label": "AUTOMATABLE HOSTS",         "height": 110 },
+    { "id": "param",   "label": "PARAMETER LAYER",           "height": 110 },
+    { "id": "curve",   "label": "CURVES (timeline source)",  "height": 120 },
+    { "id": "mod",     "label": "MODIFIERS (live sources)",  "height": 200 },
+    { "id": "macro",   "label": "MACRO PARAMETERS",          "height": 110 },
+    { "id": "ext",     "label": "EXTERNAL CONTROL",          "height": 110 },
+    { "id": "record",  "label": "RECORDING",                 "height": 100 }
+  ],
+  "nodes": [
+    { "id": "aei",   "lane": "host", "col": 2, "label": "AutomatableEditItem",
+      "purpose": "Any object that hosts parameters. Plugin, Modifier, clip effects, Track all extend it. Exposes an AutomatableParameterTree for discovery.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomatableEditItem.h" },
+
+    { "id": "ap",    "lane": "param", "col": 2, "label": "AutomatableParameter",
+      "purpose": "Ref-counted wrapper around one scalar value. The central type. Every driver (curve, modifier, macro, external) resolves to a write here.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h" },
+    { "id": "tree",  "lane": "param", "col": 4, "label": "AutomatableParameterTree",
+      "purpose": "Hierarchical view of an item's parameters. Used by the UI to show parameter lists and by automation write-path to locate targets.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h" },
+
+    { "id": "curve", "lane": "curve", "col": 1, "label": "AutomationCurve",
+      "purpose": "Breakpoint list describing a value over time. Backed by ValueTree rows — undoable like any other Edit state.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomationCurve.h" },
+    { "id": "list",  "lane": "curve", "col": 3, "label": "AutomationCurveList",
+      "purpose": "Collection of curves under an item. One curve per automated parameter.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomationCurveList.h" },
+    { "id": "iter",  "lane": "curve", "col": 5, "label": "AutomationIterator",
+      "purpose": "Realtime reader. Walks a curve's breakpoints in block order so process() can pull next value in O(1) amortised.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h" },
+
+    { "id": "mod",   "lane": "mod", "col": 2, "label": "Modifier",
+      "purpose": "Base. struct Modifier : AutomatableEditItem — a modifier's output can itself be automated. Lives in a track's ModifierList; becomes a ModifierNode (diagram 4) at render time.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_Modifier.h" },
+    { "id": "modl",  "lane": "mod", "col": 4, "label": "ModifierList",
+      "purpose": "Per-track collection of modifiers. Siblings to plugins in the track UI.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_Modifier.h" },
+    { "id": "mtimer","lane": "mod", "col": 0, "row": 1, "label": "ModifierTimer",
+      "purpose": "Shared clock abstraction for modifiers — converts block time to modifier phase so LFO/envelope/step all use the same time source.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_Modifier.h" },
+    { "id": "lfo",   "lane": "mod", "col": 1, "row": 1, "label": "LFOModifier",
+      "purpose": "Shipped modifier: low-frequency oscillator.",
+      "file": "modules/tracktion_engine/model/automation/modifiers/tracktion_LFOModifier.h" },
+    { "id": "env",   "lane": "mod", "col": 2, "row": 1, "label": "EnvelopeFollowerModifier",
+      "purpose": "Shipped modifier: follows an audio signal's amplitude envelope.",
+      "file": "modules/tracktion_engine/model/automation/modifiers/tracktion_EnvelopeFollowerModifier.h" },
+    { "id": "step",  "lane": "mod", "col": 3, "row": 1, "label": "StepModifier",
+      "purpose": "Shipped modifier: step-sequencer-style pattern.",
+      "file": "modules/tracktion_engine/model/automation/modifiers/tracktion_StepModifier.h" },
+    { "id": "rand",  "lane": "mod", "col": 4, "row": 1, "label": "RandomModifier",
+      "purpose": "Shipped modifier: randomised value with smoothing.",
+      "file": "modules/tracktion_engine/model/automation/modifiers/tracktion_RandomModifier.h" },
+    { "id": "bp",    "lane": "mod", "col": 5, "row": 1, "label": "BreakpointOsc",
+      "purpose": "Shipped modifier: breakpoint-curve oscillator.",
+      "file": "modules/tracktion_engine/model/automation/modifiers/tracktion_BreakpointOscillatorModifier.h" },
+
+    { "id": "macro", "lane": "macro", "col": 2, "label": "MacroParameter",
+      "purpose": "A user-defined parameter that IS an AutomatableParameter. Can be automated, modulated, MIDI-learned, and in turn drives other parameters.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_MacroParameter.h" },
+    { "id": "ml",    "lane": "macro", "col": 4, "label": "MacroParameterList",
+      "purpose": "Collection of macros on any MacroParameterElement (Plugin already is one — see diagram 6).",
+      "file": "modules/tracktion_engine/model/automation/tracktion_MacroParameter.h" },
+
+    { "id": "learn", "lane": "ext", "col": 1, "label": "MidiLearnState",
+      "purpose": "Captures 'the next MIDI message you send maps to this parameter'. Pairs with MidiAssignable for the UI affordance.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_MidiLearn.h" },
+    { "id": "map",   "lane": "ext", "col": 3, "label": "ParameterControlMappings",
+      "purpose": "Persistent assignment store. Both MIDI CCs and control-surface IDs resolve to entries here.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_ParameterControlMappings.h" },
+    { "id": "pch",   "lane": "ext", "col": 5, "label": "ParameterChangeHandler",
+      "purpose": "Callback fan-out point. External changes land here and fan out to target parameters.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_ParameterChangeHandler.h" },
+
+    { "id": "rec",   "lane": "record", "col": 2, "label": "AutomationRecordManager",
+      "purpose": "Captures parameter moves while transport is recording. Applies AutomationMode (Read/Touch/Latch/Write) and folds new breakpoints into the curve on stop.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomationRecordManager.h" },
+    { "id": "mode",  "lane": "record", "col": 4, "label": "AutomationMode",
+      "purpose": "Read / Touch / Latch / Write enum — same semantics as other DAWs. Governs write behaviour.",
+      "file": "modules/tracktion_engine/model/automation/tracktion_AutomationMode.h" }
+  ],
+  "edges": [
+    { "id": "e.aei.ap",    "from": "aei",  "to": "ap",    "kind": "solid" },
+    { "id": "e.ap.tree",   "from": "ap",   "to": "tree",  "kind": "dashed" },
+
+    { "id": "e.list.curve","from": "list", "to": "curve", "kind": "solid" },
+    { "id": "e.aei.list",  "from": "aei",  "to": "list",  "kind": "solid" },
+    { "id": "e.iter.curve","from": "iter", "to": "curve", "kind": "dashed" },
+    { "id": "e.iter.ap",   "from": "iter", "to": "ap",    "kind": "dotted" },
+
+    { "id": "e.modl.mod",  "from": "modl", "to": "mod",   "kind": "solid" },
+    { "id": "e.mod.aei",   "from": "mod",  "to": "aei",   "kind": "solid" },
+    { "id": "e.lfo.mod",   "from": "lfo",  "to": "mod",   "kind": "solid" },
+    { "id": "e.env.mod",   "from": "env",  "to": "mod",   "kind": "solid" },
+    { "id": "e.step.mod",  "from": "step", "to": "mod",   "kind": "solid" },
+    { "id": "e.rand.mod",  "from": "rand", "to": "mod",   "kind": "solid" },
+    { "id": "e.bp.mod",    "from": "bp",   "to": "mod",   "kind": "solid" },
+    { "id": "e.mod.mtimer","from": "mod",  "to": "mtimer","kind": "dashed" },
+    { "id": "e.mod.ap",    "from": "mod",  "to": "ap",    "kind": "dotted" },
+
+    { "id": "e.macro.ap",  "from": "macro","to": "ap",    "kind": "solid" },
+    { "id": "e.ml.macro",  "from": "ml",   "to": "macro", "kind": "solid" },
+    { "id": "e.macro.ap2", "from": "macro","to": "tree",  "kind": "dotted" },
+
+    { "id": "e.learn.map", "from": "learn","to": "map",   "kind": "dashed" },
+    { "id": "e.map.pch",   "from": "map",  "to": "pch",   "kind": "dashed" },
+    { "id": "e.pch.ap",    "from": "pch",  "to": "ap",    "kind": "dotted" },
+
+    { "id": "e.rec.ap",    "from": "rec",  "to": "ap",    "kind": "dotted" },
+    { "id": "e.rec.mode",  "from": "rec",  "to": "mode",  "kind": "dashed" },
+    { "id": "e.rec.curve", "from": "rec",  "to": "curve", "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["ap"],
+      "title": "Every driver writes one type",
+      "description": "Four ways to drive a parameter — curve, modifier, macro, external — all resolve to a write on AutomatableParameter. That uniformity is why the UI can show automation lanes for modifier outputs and macro inputs alike: they're all the same type of write." },
+    { "num": 2, "nodes": ["mod"],
+      "title": "A Modifier is an AutomatableEditItem",
+      "description": "struct Modifier : AutomatableEditItem. The output of an LFO can itself be automated by a curve, modulated by another modifier, or driven by a macro. Unlimited composition by design — and the reason modifiers appear in ModifierLists alongside plugins." },
+    { "num": 3, "nodes": ["macro"],
+      "title": "Macros are just parameters",
+      "description": "MacroParameter inherits from AutomatableParameter. That single inheritance relationship is what lets macros be automated, modulated, and MIDI-learned the same way as any parameter — AND drive other parameters. No second system." },
+    { "num": 4, "nodes": ["iter"],
+      "title": "AutomationIterator is block-ordered",
+      "description": "Instead of searching the curve every block, AutomationIterator walks breakpoints in time order and maintains a cursor. Pull next value is O(1) amortised. Seek (transport jump) invalidates and re-positions; curve edits invalidate the cache. The design is tuned for the common case: linear playback of a static curve." }
+  ],
+  "flows": [
+    { "id": "curve-path",
+      "label": "Curve → parameter",
+      "description": "An item owns an AutomationCurveList; an AutomationIterator walks a curve breakpoint-by-breakpoint and writes into the AutomatableParameter each block.",
+      "edges": ["e.aei.list", "e.list.curve", "e.iter.curve", "e.iter.ap"] },
+    { "id": "modifier-path",
+      "label": "Modifier → parameter",
+      "description": "A ModifierList holds Modifiers that inherit from AutomatableEditItem. Each block the modifier's output value writes into assigned target parameters.",
+      "edges": ["e.modl.mod", "e.mod.aei", "e.mod.ap", "e.mod.mtimer"] },
+    { "id": "macro-ext",
+      "label": "Macro & external drivers",
+      "description": "MacroParameter IS an AutomatableParameter and can drive others. External control (MIDI learn / control surface) resolves through ParameterControlMappings + ParameterChangeHandler into the same parameter write path.",
+      "edges": ["e.macro.ap", "e.learn.map", "e.map.pch", "e.pch.ap"] },
+    { "id": "record",
+      "label": "Write-mode recording",
+      "description": "AutomationRecordManager captures moves made while the transport is recording, chooses the mode (Read/Touch/Latch/Write), and folds new breakpoints into the curve on stop.",
+      "edges": ["e.rec.ap", "e.rec.mode", "e.rec.curve"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

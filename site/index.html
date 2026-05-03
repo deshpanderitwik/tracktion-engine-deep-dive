@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tracktion Engine — architecture deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/style.css?v=10" />
+<script defer src="assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="lessons.html">ten lessons</a>
+    <a href="glossary.html">glossary</a>
+    <a href="about.html">about</a>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="page-header">
+    <div class="kicker">a tour for people who want to build DAWs</div>
+    <h1>How Tracktion Engine is put together</h1>
+    <p class="lede">
+      Twelve diagrams, each 300–600 words of commentary, each built by reading
+      the source. This is a teaching artifact — the goal is that a reader who
+      knows how to code but has never touched a DAW codebase can come away
+      able to sketch the major subsystems of one.
+    </p>
+  </header>
+
+  <h2>How to read this site</h2>
+  <p>
+    Every diagram uses the same visual grammar. Horizontal swimlanes group
+    related nodes. Boxes are source files or conceptual entities. Edges
+    come in exactly three kinds: <strong>solid</strong> is a static
+    relationship you can see in the source (an <code>#include</code> or an
+    ownership), <strong>dashed</strong> is a runtime message across some
+    boundary (a callback, an event, an inter-thread queue),
+    <strong>dotted</strong> is data flowing across a boundary (audio samples,
+    MIDI events, file bytes). Hover a box for its one-line purpose and a
+    path into the source. Click a box to highlight its dependencies (amber)
+    and dependents (teal). Numbered red circles are
+    <em>flags</em>: a tradeoff worth calling out, an open question, or
+    something I couldn't verify from the source. Click one in the sidebar
+    to see which nodes it applies to. Some diagrams also have
+    <em>flow overlays</em> — toggleable animations that trace a specific
+    user journey across the graph. Those are the teaching device that turns
+    a static map into a story.
+  </p>
+  <p>
+    Read in order. Diagrams 1 and 3 establish the vocabulary that every
+    later diagram depends on.
+  </p>
+
+  <ol class="toc-list">
+    <li><a class="toc-card" href="diagrams/01-daw-concepts.html">
+      <div class="toc-num">01</div>
+      <div class="toc-title">DAW conceptual map</div>
+      <div class="toc-summary">Concepts before code: what an Edit, Track, Clip, Plugin, Transport, and Rack are, independent of any codebase.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/02-module-graph.html">
+      <div class="toc-num">02</div>
+      <div class="toc-title">Module dependency graph</div>
+      <div class="toc-summary">Where JUCE ends and Tracktion begins. The four-pillar layering and why it's shaped that way.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/03-the-edit.html">
+      <div class="toc-num">03</div>
+      <div class="toc-title">The Edit — document object model</div>
+      <div class="toc-summary">The centerpiece. How an Edit owns tracks, tempos, markers, and why most of it is backed by a value tree.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/04-rendering-graph.html">
+      <div class="toc-num">04</div>
+      <div class="toc-title">Audio rendering graph</div>
+      <div class="toc-summary">How the Edit becomes a DAG of Node objects processed per audio block. The hardest diagram on the site.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/05-transport.html">
+      <div class="toc-num">05</div>
+      <div class="toc-title">Transport &amp; playback</div>
+      <div class="toc-summary">Play, stop, loop, and the time domains they all touch. The thread-safety model that makes this work.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/06-plugins.html">
+      <div class="toc-num">06</div>
+      <div class="toc-title">Plugin system</div>
+      <div class="toc-summary">Internal plugins, VST/AU/CLAP hosting, and Racks — a modular synth graph living inside a linear timeline.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/07-midi.html">
+      <div class="toc-num">07</div>
+      <div class="toc-title">MIDI pipeline</div>
+      <div class="toc-summary">From devices to clips: recording, quantization, groove. Why the real-time and edit-time paths look deceptively similar.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/08-audio-files.html">
+      <div class="toc-num">08</div>
+      <div class="toc-title">Audio file pipeline</div>
+      <div class="toc-summary">AudioFileCache, proxies, thumbnails. Why proxy files exist and what they buy you.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/09-threading.html">
+      <div class="toc-num">09</div>
+      <div class="toc-title">Threading &amp; real-time constraints</div>
+      <div class="toc-summary">The audio thread, the message thread, the worker pool. The lock-free primitives that connect them — and why.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/10-recording-comping.html">
+      <div class="toc-num">10</div>
+      <div class="toc-title">Recording &amp; comping</div>
+      <div class="toc-summary">Punch, loop, takes, comp. Why comping is a first-class model concept, not just a UI feature.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/11-automation.html">
+      <div class="toc-num">11</div>
+      <div class="toc-title">Automation &amp; modifiers</div>
+      <div class="toc-summary">Curves, LFOs, parameter targets. The offline/realtime boundary where most automation bugs live.</div>
+    </a></li>
+    <li><a class="toc-card" href="diagrams/12-rendering.html">
+      <div class="toc-num">12</div>
+      <div class="toc-title">Rendering pipeline</div>
+      <div class="toc-summary">Offline render vs. realtime playback. How much of the graph they share, and where they narrowly diverge.</div>
+    </a></li>
+  </ol>
+
+  <hr />
+
+  <p class="mono" style="color:var(--text-faint);font-size:0.85rem;">
+    Built against Tracktion Engine 3.2.0, commit <a href="https://github.com/Tracktion/tracktion_engine/commit/2877b621f2fbee564d0696a616b86bf8ba8c8ab0"><code>2877b621</code></a>.
+    Source: <a href="https://github.com/Tracktion/tracktion_engine">github.com/Tracktion/tracktion_engine</a>.
+    Something wrong? <a href="about.html">Read the methodology.</a>
+  </p>
+</main>
+
+</body>
+</html>

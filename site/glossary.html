@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Glossary — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/style.css?v=10" />
+<script defer src="assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="index.html">home</a>
+    <a href="about.html">about</a>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="page-header">
+    <div class="kicker">every term that appears on a diagram</div>
+    <h1>Glossary</h1>
+    <p class="lede">
+      One sentence per term, linked to the diagrams where it shows up and to
+      the source file it came from. Built from the union of every node on the
+      twelve diagrams — 230 distinct terms. Where a term appears on more than
+      one diagram, the longest definition wins and every appearance is cross-linked.
+    </p>
+  </header>
+
+<nav class="glossary-letters mono" aria-label="jump to letter">
+  <a href="#sec-A">A</a>
+  <a href="#sec-B">B</a>
+  <a href="#sec-C">C</a>
+  <a href="#sec-D">D</a>
+  <a href="#sec-E">E</a>
+  <a href="#sec-F">F</a>
+  <a href="#sec-G">G</a>
+  <a href="#sec-H">H</a>
+  <a href="#sec-I">I</a>
+  <a href="#sec-J">J</a>
+  <a href="#sec-L">L</a>
+  <a href="#sec-M">M</a>
+  <a href="#sec-N">N</a>
+  <a href="#sec-P">P</a>
+  <a href="#sec-R">R</a>
+  <a href="#sec-S">S</a>
+  <a href="#sec-T">T</a>
+  <a href="#sec-U">U</a>
+  <a href="#sec-V">V</a>
+  <a href="#sec-W">W</a>
+</nav>
+
+<section class="glossary-section" id="sec-A">
+<h2 class="glossary-letter">A</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-abletonlink">
+    <dt><code>AbletonLink</code></dt>
+    <dd>
+      <p class="glossary-def">Constructed AbletonLink(TransportControl&amp;). External tempo/transport sync. requestStartStopChange() and requestTempoChange() drive the transport from the outside.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_AbletonLink.h">modules/tracktion_engine/playback/tracktion_AbletonLink.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-activenotelist">
+    <dt><code>ActiveNoteList</code></dt>
+    <dd>
+      <p class="glossary-def">Tracks which notes are currently held. Lets the node issue matching note-offs when looping, stopping, or trimming — avoids stuck notes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_ActiveNoteList.h">modules/tracktion_engine/midi/tracktion_ActiveNoteList.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-aradocumentholder">
+    <dt><code>ARADocumentHolder</code></dt>
+    <dd>
+      <p class="glossary-def">Lifetime anchor for ARA-aware plugins (e.g. Melodyne) that need a document-scoped handle.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/tree/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/ARA/">modules/tracktion_engine/plugins/ARA/</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-aranode">
+    <dt><code>ARANode</code></dt>
+    <dd>
+      <p class="glossary-def">ARA-aware plugin node (e.g. Melodyne). Plugin sees the source audio at document scope, not per-block.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_ARANode.h">modules/tracktion_engine/playback/graph/tracktion_ARANode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-arapluginfactory">
+    <dt><code>ARAPluginFactory</code></dt>
+    <dd>
+      <p class="glossary-def">ARA integration: exposes the Edit's clips to an ARA-aware plugin as a document. Pairs with the ARANode from diagram 4.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/ARA/tracktion_ARAPluginFactory.h">modules/tracktion_engine/plugins/ARA/tracktion_ARAPluginFactory.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audio-callback">
+    <dt><code>Audio callback</code></dt>
+    <dd>
+      <p class="glossary-def">The OS / host-provided realtime thread. Must not lock, allocate, or block. Everything else on this diagram exists to keep that true.</p>
+      <p class="glossary-file mono">(OS / host)</p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiodevice">
+    <dt><code>AudioDevice</code></dt>
+    <dd>
+      <p class="glossary-def">The soundcard (or hosted driver). Where audio samples come from and go to.</p>
+      <p class="glossary-file mono">playback/tracktion_DeviceManager.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofifo">
+    <dt><code>AudioFifo</code></dt>
+    <dd>
+      <p class="glossary-def">Lock-free SPSC ring buffer for audio samples. Backs the read-ahead path so the audio thread never locks.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFifo.h">modules/tracktion_engine/audio_files/tracktion_AudioFifo.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofile">
+    <dt><code>AudioFile</code></dt>
+    <dd>
+      <p class="glossary-def">Immutable value wrapping juce::File + AudioFileInfo (sample rate, length, channels, metadata). Equality by path. This is what a WaveAudioClip stores.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFile.h">modules/tracktion_engine/audio_files/tracktion_AudioFile.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofilecache">
+    <dt><code>AudioFileCache</code></dt>
+    <dd>
+      <p class="glossary-def">Shared pool of open readers. Hands out Reader handles to WaveNodes. Keeps read-ahead buffers populated across workers.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFileCache.h">modules/tracktion_engine/audio_files/tracktion_AudioFileCache.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofileinfo">
+    <dt><code>AudioFileInfo</code></dt>
+    <dd>
+      <p class="glossary-def">POD descriptor: sample rate, bits/sample, length, channels, loop markers, BPM if known. Populated by the format layer on first open.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFile.h">modules/tracktion_engine/audio_files/tracktion_AudioFile.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofilemanager">
+    <dt><code>AudioFileManager</code></dt>
+    <dd>
+      <p class="glossary-def">Engine-owned (extends juce::AsyncUpdater). Tracks open files, invalidates cache entries on disk changes, owns thumbnail cache + proxy generator.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFileManager.h">modules/tracktion_engine/audio_files/tracktion_AudioFileManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiofilewriter">
+    <dt><code>AudioFileWriter</code></dt>
+    <dd>
+      <p class="glossary-def">Wraps the selected juce::AudioFormatWriter (WAV, FLAC, MP3 via LAME, etc). Receives blocks from the NodeRenderContext.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFileWriter.h">modules/tracktion_engine/audio_files/tracktion_AudioFileWriter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audioformatmanager">
+    <dt><code>AudioFormatManager</code></dt>
+    <dd>
+      <p class="glossary-def">Wraps JUCE's built-in formats (WAV/AIFF/FLAC/Ogg) and registers Tracktion's additional formats.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioFormatManager.h">modules/tracktion_engine/audio_files/tracktion_AudioFormatManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audiograph">
+    <dt><code>AudioGraph</code></dt>
+    <dd>
+      <p class="glossary-def">A DAG of Node objects processed per audio block. Built from the Edit each time playback starts.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/tracktion_graph/tracktion_Node.h">tracktion_graph/tracktion_Node.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-audioproxygenerator">
+    <dt><code>AudioProxyGenerator</code></dt>
+    <dd>
+      <p class="glossary-def">Background worker that generates faster-to-read proxy files (downsampled / converted format) for slow-disk originals.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_AudioProxyGenerator.h">modules/tracktion_engine/audio_files/tracktion_AudioProxyGenerator.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automatableedititem">
+    <dt><code>AutomatableEditItem</code></dt>
+    <dd>
+      <p class="glossary-def">Any object that hosts parameters. Plugin, Modifier, clip effects, Track all extend it. Exposes an AutomatableParameterTree for discovery.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomatableEditItem.h">modules/tracktion_engine/model/automation/tracktion_AutomatableEditItem.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automatableparameter">
+    <dt><code>AutomatableParameter</code></dt>
+    <dd>
+      <p class="glossary-def">Ref-counted wrapper around one scalar value. The central type. Every driver (curve, modifier, macro, external) resolves to a write here.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h">modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automatableparametertree">
+    <dt><code>AutomatableParameterTree</code></dt>
+    <dd>
+      <p class="glossary-def">Hierarchical view of an item's parameters. Used by the UI to show parameter lists and by automation write-path to locate targets.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h">modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automation">
+    <dt><code>Automation</code></dt>
+    <dd>
+      <p class="glossary-def">Any parameter value that changes over time. Lives in the Edit; evaluated in the graph.</p>
+      <p class="glossary-file mono">model/automation/tracktion_AutomationCurve.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automationcurve">
+    <dt><code>AutomationCurve</code></dt>
+    <dd>
+      <p class="glossary-def">Breakpoint list describing a value over time. Backed by ValueTree rows — undoable like any other Edit state.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomationCurve.h">modules/tracktion_engine/model/automation/tracktion_AutomationCurve.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automationcurvelist">
+    <dt><code>AutomationCurveList</code></dt>
+    <dd>
+      <p class="glossary-def">Collection of curves under an item. One curve per automated parameter.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomationCurveList.h">modules/tracktion_engine/model/automation/tracktion_AutomationCurveList.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automationiterator">
+    <dt><code>AutomationIterator</code></dt>
+    <dd>
+      <p class="glossary-def">Realtime reader. Walks a curve's breakpoints in block order so process() can pull next value in O(1) amortised.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h">modules/tracktion_engine/model/automation/tracktion_AutomatableParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automationmode">
+    <dt><code>AutomationMode</code></dt>
+    <dd>
+      <p class="glossary-def">Read / Touch / Latch / Write enum — same semantics as other DAWs. Governs write behaviour.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomationMode.h">modules/tracktion_engine/model/automation/tracktion_AutomationMode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-automationrecordmanager">
+    <dt><code>AutomationRecordManager</code></dt>
+    <dd>
+      <p class="glossary-def">Captures parameter moves while transport is recording. Applies AutomationMode (Read/Touch/Latch/Write) and folds new breakpoints into the curve on stop.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_AutomationRecordManager.h">modules/tracktion_engine/model/automation/tracktion_AutomationRecordManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-auxreturn">
+    <dt><code>AuxReturn</code></dt>
+    <dd>
+      <p class="glossary-def">Receives audio from aux buses.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_AuxReturn.h">modules/tracktion_engine/plugins/internal/tracktion_AuxReturn.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-auxsend">
+    <dt><code>AuxSend</code></dt>
+    <dd>
+      <p class="glossary-def">Diverts a copy of the track's audio onto an aux bus.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_AuxSend.h">modules/tracktion_engine/plugins/internal/tracktion_AuxSend.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-auxsendnode">
+    <dt><code>AuxSendNode</code></dt>
+    <dd>
+      <p class="glossary-def">Diverts a copy of a track's audio onto an aux bus.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_AuxSendNode.h">modules/tracktion_engine/playback/graph/tracktion_AuxSendNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-B">
+<h2 class="glossary-letter">B</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-beatdetect">
+    <dt><code>BeatDetect</code></dt>
+    <dd>
+      <p class="glossary-def">Beat / transient detection used when importing a file to populate LoopInfo.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/timestretch/tracktion_BeatDetect.h">modules/tracktion_engine/timestretch/tracktion_BeatDetect.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-breakpointosc">
+    <dt><code>BreakpointOsc</code></dt>
+    <dd>
+      <p class="glossary-def">Shipped modifier: breakpoint-curve oscillator.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/modifiers/tracktion_BreakpointOscillatorModifier.h">modules/tracktion_engine/model/automation/modifiers/tracktion_BreakpointOscillatorModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-bufferedaudioreader">
+    <dt><code>BufferedAudioReader</code></dt>
+    <dd>
+      <p class="glossary-def">Read-ahead wrapper: a background thread fills a ring buffer from the real reader.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_BufferedAudioReader.h">modules/tracktion_engine/audio_files/tracktion_BufferedAudioReader.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-bufferedfilereader">
+    <dt><code>BufferedFileReader</code></dt>
+    <dd>
+      <p class="glossary-def">File-backed read-ahead reader. Used for streaming larger files that don't fit (or shouldn't fit) in RAM.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_BufferedFileReader.h">modules/tracktion_engine/audio_files/tracktion_BufferedFileReader.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-C">
+<h2 class="glossary-letter">C</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-choc">
+    <dt><code>choc</code></dt>
+    <dd>
+      <p class="glossary-def">David Rowland's C++ header-only helpers: buffers, MIDI sequence, lock-free FIFOs, non-allocating sort. Used by all three Tracktion modules.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/choc">modules/3rd_party/choc</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-chord">
+    <dt><code>Chord</code></dt>
+    <dd>
+      <p class="glossary-def">Musical chord representation. Used by the pattern generator and editor chord-name logic.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_Musicality.h">modules/tracktion_engine/midi/tracktion_Musicality.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-chorus">
+    <dt><code>Chorus</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in chorus.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_Chorus.h">modules/tracktion_engine/plugins/effects/tracktion_Chorus.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-clicknode">
+    <dt><code>ClickNode</code></dt>
+    <dd>
+      <p class="glossary-def">The metronome. Synthesises click samples on the fly.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_ClickNode.h">modules/tracktion_engine/playback/graph/tracktion_ClickNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-clip">
+    <dt><code>Clip</code></dt>
+    <dd>
+      <p class="glossary-def">Region on a track. Polymorphic (wave/MIDI/edit/step/arranger/chord/marker/container). Owned by the track's ClipOwner slice of state.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_Clip.h">modules/tracktion_engine/model/clips/tracktion_Clip.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-clip-bake-warp-reverse">
+    <dt><code>Clip bake (warp/reverse)</code></dt>
+    <dd>
+      <p class="glossary-def">Warp-time and reverse destructively render the clip's audio to a new file that replaces the source.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/tree/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/">modules/tracktion_engine/model/clips/</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-clipslot">
+    <dt><code>ClipSlot</code></dt>
+    <dd>
+      <p class="glossary-def">One cell in the launcher grid. May hold a Clip to launch.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Scene.h">modules/tracktion_engine/model/edit/tracktion_Scene.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-combiningnode">
+    <dt><code>CombiningNode</code></dt>
+    <dd>
+      <p class="glossary-def">Concatenates per-clip sub-graphs into a single track-level audio stream.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_CombiningNode.h">modules/tracktion_engine/playback/graph/tracktion_CombiningNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-compfactory">
+    <dt><code>CompFactory</code></dt>
+    <dd>
+      <p class="glossary-def">Creates comp managers for a given clip. Keeps CompManager construction localised.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_CompManager.h">modules/tracktion_engine/model/clips/tracktion_CompManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-compmanager">
+    <dt><code>CompManager</code></dt>
+    <dd>
+      <p class="glossary-def">Base of WaveCompManager / MidiCompManager. juce::SingleThreadedReferenceCountedObject — editor-thread only, never touches audio thread.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_CompManager.h">modules/tracktion_engine/model/clips/tracktion_CompManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-compressor">
+    <dt><code>Compressor</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in compressor.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_Compressor.h">modules/tracktion_engine/plugins/effects/tracktion_Compressor.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-connectednode">
+    <dt><code>ConnectedNode</code></dt>
+    <dd>
+      <p class="glossary-def">Generic connectable wrapper. Used as a join point when sub-graphs need to be reparented.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/nodes/tracktion_ConnectedNode.h">modules/tracktion_graph/tracktion_graph/nodes/tracktion_ConnectedNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-containerclipnode">
+    <dt><code>ContainerClipNode</code></dt>
+    <dd>
+      <p class="glossary-def">Renders a container clip (a clip that holds other clips as sub-timeline).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_ContainerClipNode.h">modules/tracktion_engine/playback/graph/tracktion_ContainerClipNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-createnodeforedit">
+    <dt><code>createNodeForEdit</code></dt>
+    <dd>
+      <p class="glossary-def">The bridge. Two overloads: one takes EditPlaybackContext for live playback, one takes Edit&amp; for offline render. Both return a unique_ptr&lt;tracktion::graph::Node&gt;.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h">modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-createnodeforedit-edit">
+    <dt><code>createNodeForEdit(Edit&amp;)</code></dt>
+    <dd>
+      <p class="glossary-def">The OFFLINE overload of the builder from diagram 4. Omits device-instance nodes (no live inputs) and freeze-file shortcuts that don't apply offline.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h">modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-createnodeparams">
+    <dt><code>CreateNodeParams</code></dt>
+    <dd>
+      <p class="glossary-def">Struct of knobs: sampleRate, blockSize, allowedClips/Tracks masks, forRendering, includePlugins, includeBypassedPlugins, allowClipSlots, readAheadTimeStretchNodes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h">modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-crill">
+    <dt><code>crill</code></dt>
+    <dd>
+      <p class="glossary-def">Realtime-safe synchronization primitives — seqlock_object, spin_mutex, progressive backoff. Used by core (seqlock) and engine.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/crill">modules/3rd_party/crill</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-D">
+<h2 class="glossary-letter">D</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-dawprojectexport">
+    <dt><code>DAWprojectExport</code></dt>
+    <dd>
+      <p class="glossary-def">Exports Edit structure to the open .dawproject format. No audio render — structural interchange only.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/project/dawproject/tracktion_DAWprojectExport.h">modules/tracktion_engine/project/dawproject/tracktion_DAWprojectExport.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-delay">
+    <dt><code>Delay</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in delay.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_Delay.h">modules/tracktion_engine/plugins/effects/tracktion_Delay.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-devicemanager">
+    <dt><code>DeviceManager</code></dt>
+    <dd>
+      <p class="glossary-def">Engine-owned. Extends juce::ChangeBroadcaster. Owns wave/MIDI device lists, sample rate, block size, output latency. Rescans on device changes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_DeviceManager.h">modules/tracktion_engine/playback/tracktion_DeviceManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-disk-workers">
+    <dt><code>Disk workers</code></dt>
+    <dd>
+      <p class="glossary-def">AudioFileCache read-ahead thread(s), proxy generator, recording writer. All talk to the audio thread through AudioFifo ring buffers.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/tree/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/">modules/tracktion_engine/audio_files/</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-E">
+<h2 class="glossary-letter">E</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-edit">
+    <dt><code>Edit</code></dt>
+    <dd>
+      <p class="glossary-def">One Edit = one song. Owns (by unique_ptr or value) every object below this row. Subclass of Selectable; uses a juce::Timer for housekeeping.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Edit.h">modules/tracktion_engine/model/edit/tracktion_Edit.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-editcliprenderjob">
+    <dt><code>EditClipRenderJob</code></dt>
+    <dd>
+      <p class="glossary-def">Specialises EditRenderJob for EditClip (nested-edit clip) rendering.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h">modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-editinputdevices">
+    <dt><code>EditInputDevices</code></dt>
+    <dd>
+      <p class="glossary-def">The per-Edit mapping of input devices to tracks. Holds which tracks are armed for which inputs.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_EditInputDevices.h">modules/tracktion_engine/playback/tracktion_EditInputDevices.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-editplaybackcontext">
+    <dt><code>EditPlaybackContext</code></dt>
+    <dd>
+      <p class="glossary-def">Per-Edit runtime. Constructed EditPlaybackContext(TransportControl&amp;). Owns device-instance lists, the built Node root, a SyncPoint, pending position changes, speed compensation, tempo adjustment, recording state.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h">modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-editrenderer">
+    <dt><code>EditRenderer</code></dt>
+    <dd>
+      <p class="glossary-def">Full-Edit renderer. Handles stems, time range, formats, dithering, normalise.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_Renderer.h">modules/tracktion_engine/model/export/tracktion_Renderer.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-editrenderjob">
+    <dt><code>EditRenderJob</code></dt>
+    <dd>
+      <p class="glossary-def">RenderManager::Job for rendering a sub-Edit to a file. Backbone of both nested-Edit playback and freeze.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h">modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-engine">
+    <dt><code>Engine</code></dt>
+    <dd>
+      <p class="glossary-def">Process-wide singleton. Holds shared services (device manager, plugin manager, settings). Tracks live Edits in ActiveEdits but does NOT own them.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/tracktion_engine.h">modules/tracktion_engine/tracktion_engine.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-envelopefollowermodifier">
+    <dt><code>EnvelopeFollowerModifier</code></dt>
+    <dd>
+      <p class="glossary-def">Shipped modifier: follows an audio signal's amplitude envelope.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/modifiers/tracktion_EnvelopeFollowerModifier.h">modules/tracktion_engine/model/automation/modifiers/tracktion_EnvelopeFollowerModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-equaliser">
+    <dt><code>Equaliser</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in parametric EQ.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_Equaliser.h">modules/tracktion_engine/plugins/effects/tracktion_Equaliser.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-expected">
+    <dt><code>expected</code></dt>
+    <dd>
+      <p class="glossary-def">std::expected polyfill. Engine uses it for error-returning APIs that don't throw.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/expected">modules/3rd_party/expected</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-exportable">
+    <dt><code>Exportable</code></dt>
+    <dd>
+      <p class="glossary-def">Interface any renderable object implements. Answers 'what source files do you need' and 'what outputs will you produce' so the export path can gather deps and package stems.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_Exportable.h">modules/tracktion_engine/model/export/tracktion_Exportable.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-exportjob">
+    <dt><code>ExportJob</code></dt>
+    <dd>
+      <p class="glossary-def">ThreadPoolJobWithProgress wrapper. Lets the UI show a progress bar and cancel. The generic shell any render uses when driven from the UI.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_ExportJob.h">modules/tracktion_engine/model/export/tracktion_ExportJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-externalplayheadsynchroniser">
+    <dt><code>ExternalPlayheadSynchroniser</code></dt>
+    <dd>
+      <p class="glossary-def">Used when the engine is inside a plugin. Call synchronise(AudioPlayHead&amp;) in processBlock to drive the Edit's transport from the host's playhead. Mirror of AbletonLink.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/utilities/tracktion_ExternalPlayheadSynchroniser.h">modules/tracktion_engine/utilities/tracktion_ExternalPlayheadSynchroniser.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-externalplugin">
+    <dt><code>ExternalPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Wraps a juce::AudioPluginInstance (VST3/AU/CLAP/LV2). applyToBuffer forwards to the hosted instance. Editor managed via PluginWindowState.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/external/tracktion_ExternalPlugin.h">modules/tracktion_engine/plugins/external/tracktion_ExternalPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-F">
+<h2 class="glossary-letter">F</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-fadeinoutnode">
+    <dt><code>FadeInOutNode</code></dt>
+    <dd>
+      <p class="glossary-def">Applies clip-level fade in/out curves to its child.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_FadeInOutNode.h">modules/tracktion_engine/playback/graph/tracktion_FadeInOutNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-farbot">
+    <dt><code>farbot</code></dt>
+    <dd>
+      <p class="glossary-def">Realtime FIFO + shared value primitives. Also in tracktion_graph/3rd_party/ — used by the graph's AudioBufferPool.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/3rd_party/farbot">modules/tracktion_graph/3rd_party/farbot</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-ffmpegencoderaudioformat">
+    <dt><code>FFmpegEncoderAudioFormat</code></dt>
+    <dd>
+      <p class="glossary-def">MP4 / AAC export via ffmpeg. Dynamically-loaded dependency.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/formats/tracktion_FFmpegEncoderAudioFormat.h">modules/tracktion_engine/audio_files/formats/tracktion_FFmpegEncoderAudioFormat.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-floataudiofileformat">
+    <dt><code>FloatAudioFileFormat</code></dt>
+    <dd>
+      <p class="glossary-def">Tracktion's own lossless float format, used as an intermediate for freeze/render.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/formats/tracktion_FloatAudioFileFormat.h">modules/tracktion_engine/audio_files/formats/tracktion_FloatAudioFileFormat.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-fouroscplugin">
+    <dt><code>FourOscPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in four-oscillator synth (the engine's shipped instrument).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_FourOscPlugin.h">modules/tracktion_engine/plugins/effects/tracktion_FourOscPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-freezepoint">
+    <dt><code>FreezePoint</code></dt>
+    <dd>
+      <p class="glossary-def">Marks the boundary where track-freeze renders audio to disk. See diagram 10.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h">modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-freezepointplugin">
+    <dt><code>FreezePointPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">An internal Plugin that marks where freeze cuts the plugin chain. When frozen, the graph builder skips upstream of this point and plays a wave file instead.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h">modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-G">
+<h2 class="glossary-letter">G</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-globalmacros">
+    <dt><code>GlobalMacros</code></dt>
+    <dd>
+      <p class="glossary-def">Edit-level macro parameters. Drive plugin params via assignment, independent of tracks.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_MacroParameter.h">modules/tracktion_engine/model/automation/tracktion_MacroParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-graph-workers">
+    <dt><code>Graph workers</code></dt>
+    <dd>
+      <p class="glossary-def">Pool of worker threads created by ThreadPoolCreator. Process independent sub-DAGs each audio block.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h">modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-H">
+<h2 class="glossary-letter">H</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-hostedaudiodeviceinterface">
+    <dt><code>HostedAudioDeviceInterface</code></dt>
+    <dd>
+      <p class="glossary-def">Adapter used when the engine is embedded in a host (a plugin or test harness) instead of driving the audio device itself. Feeds blocks through the same pipeline.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_HostedAudioDevice.h">modules/tracktion_engine/playback/tracktion_HostedAudioDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-I">
+<h2 class="glossary-letter">I</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-impulseresponseplugin">
+    <dt><code>ImpulseResponsePlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Convolution reverb / cabinet-sim via IR loading.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_ImpulseResponsePlugin.h">modules/tracktion_engine/plugins/effects/tracktion_ImpulseResponsePlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-inputdeviceinstance">
+    <dt><code>InputDeviceInstance</code></dt>
+    <dd>
+      <p class="glossary-def">Per-Edit, per-input adapter. Base class of WaveInputDeviceInstance and MidiInputDeviceInstance. Holds the per-session RecordingContext.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_InputDevice.h">modules/tracktion_engine/playback/devices/tracktion_InputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-inputdevicestate-valuetree">
+    <dt><code>inputDeviceState : ValueTree</code></dt>
+    <dd>
+      <p class="glossary-def">Second ValueTree. Holds per-input-device routing and arming. Separate from 'state' because it references machine-local device IDs.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Edit.h">modules/tracktion_engine/model/edit/tracktion_Edit.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-insertplugin">
+    <dt><code>InsertPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Hardware-insert round-trip (send out a physical output, receive back on an input).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_InsertPlugin.h">modules/tracktion_engine/plugins/internal/tracktion_InsertPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-insertsendnode">
+    <dt><code>InsertSendNode</code></dt>
+    <dd>
+      <p class="glossary-def">Inserts an external round-trip (hardware insert) into the signal path.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_InsertSendNode.h">modules/tracktion_engine/playback/graph/tracktion_InsertSendNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-J">
+<h2 class="glossary-letter">J</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-juce-asyncupdater">
+    <dt><code>juce::AsyncUpdater</code></dt>
+    <dd>
+      <p class="glossary-def">Audio-thread-safe message-thread callback. Used wherever the audio path needs to ping UI without blocking.</p>
+      <p class="glossary-file mono">(juce)</p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-audio-basics">
+    <dt><code>juce_audio_basics</code></dt>
+    <dd>
+      <p class="glossary-def">AudioBuffer, AudioChannelSet, MIDI primitives. Bottom of the JUCE audio stack used by tracktion_graph.</p>
+      <p class="glossary-file mono">juce/modules/juce_audio_basics</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-audio-devices">
+    <dt><code>juce_audio_devices</code></dt>
+    <dd>
+      <p class="glossary-def">Audio + MIDI device abstraction (CoreAudio / ASIO / ALSA / WASAPI). Only tracktion_engine depends on it.</p>
+      <p class="glossary-file mono">juce/modules/juce_audio_devices</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-audio-formats">
+    <dt><code>juce_audio_formats</code></dt>
+    <dd>
+      <p class="glossary-def">WAV/AIFF/FLAC/MP3/Ogg readers + writers. The only JUCE module that tracktion_core and tracktion_graph declare as a dep.</p>
+      <p class="glossary-file mono">juce/modules/juce_audio_formats</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-audio-utils">
+    <dt><code>juce_audio_utils</code></dt>
+    <dd>
+      <p class="glossary-def">Higher-level audio helpers (metronome, thumbnails). Engine-only dep.</p>
+      <p class="glossary-file mono">juce/modules/juce_audio_utils</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-dsp">
+    <dt><code>juce_dsp</code></dt>
+    <dd>
+      <p class="glossary-def">DSP building blocks (filters, oscillators, convolution). Engine-only.</p>
+      <p class="glossary-file mono">juce/modules/juce_dsp</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-gui-extra">
+    <dt><code>juce_gui_extra</code></dt>
+    <dd>
+      <p class="glossary-def">Extra GUI pieces (web browser component, system tray). Engine-only.</p>
+      <p class="glossary-file mono">juce/modules/juce_gui_extra</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-juce-osc">
+    <dt><code>juce_osc</code></dt>
+    <dd>
+      <p class="glossary-def">Open Sound Control networking. Engine-only, used by control surfaces.</p>
+      <p class="glossary-file mono">juce/modules/juce_osc</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-L">
+<h2 class="glossary-letter">L</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-lamemanager">
+    <dt><code>LAMEManager</code></dt>
+    <dd>
+      <p class="glossary-def">MP3 export through LAME. Its own class because LAME is loaded dynamically.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/formats/tracktion_LAMEManager.h">modules/tracktion_engine/audio_files/formats/tracktion_LAMEManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-latencynode">
+    <dt><code>LatencyNode</code></dt>
+    <dd>
+      <p class="glossary-def">Generic latency-compensation delay. Inserted by the scheduler to align paths with different processing latencies.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/nodes/tracktion_LatencyNode.h">modules/tracktion_graph/tracktion_graph/nodes/tracktion_LatencyNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-latencyplugin">
+    <dt><code>LatencyPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Introduces a reported latency — used to test latency compensation.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_LatencyPlugin.h">modules/tracktion_engine/plugins/effects/tracktion_LatencyPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-launchquantisation">
+    <dt><code>LaunchQuantisation</code></dt>
+    <dd>
+      <p class="glossary-def">Quantisation policy for the clip launcher (wait for next bar, next beat, etc).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_LaunchQuantisation.h">modules/tracktion_engine/model/edit/tracktion_LaunchQuantisation.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-levelmeasuringnode">
+    <dt><code>LevelMeasuringNode</code></dt>
+    <dd>
+      <p class="glossary-def">Pass-through node that captures peak/RMS for UI metering.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_LevelMeasuringNode.h">modules/tracktion_engine/playback/graph/tracktion_LevelMeasuringNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-levelmeter">
+    <dt><code>LevelMeter</code></dt>
+    <dd>
+      <p class="glossary-def">Pass-through plugin that captures peak/RMS for UI metering.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_LevelMeter.h">modules/tracktion_engine/plugins/internal/tracktion_LevelMeter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-lfomodifier">
+    <dt><code>LFOModifier</code></dt>
+    <dd>
+      <p class="glossary-def">Shipped modifier: low-frequency oscillator.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/modifiers/tracktion_LFOModifier.h">modules/tracktion_engine/model/automation/modifiers/tracktion_LFOModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-libsamplerate">
+    <dt><code>libsamplerate</code></dt>
+    <dd>
+      <p class="glossary-def">Secret Rabbit Code — sample-rate conversion. Engine-only (playback .cpp).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/libsamplerate">modules/3rd_party/libsamplerate</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-lightweightsemaphore">
+    <dt><code>lightweightsemaphore</code></dt>
+    <dd>
+      <p class="glossary-def">moodycamel's spin/sleep hybrid semaphore. Backs the 'lightweight' pool strategies.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/3rd_party/lightweightsemaphore.h">modules/tracktion_graph/3rd_party/lightweightsemaphore.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-link-callback">
+    <dt><code>Link callback</code></dt>
+    <dd>
+      <p class="glossary-def">AbletonLink's internal thread delivering tempo/transport updates. Calls into TransportControl from outside.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_AbletonLink.h">modules/tracktion_engine/playback/tracktion_AbletonLink.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-livemidioutputnode">
+    <dt><code>LiveMidiOutputNode</code></dt>
+    <dd>
+      <p class="glossary-def">Taps MIDI from the graph and sends it to a live output device.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_LiveMidiOutputNode.h">modules/tracktion_engine/playback/graph/tracktion_LiveMidiOutputNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-lockfreemultithreadednodeplayer">
+    <dt><code>LockFreeMultiThreadedNodePlayer</code></dt>
+    <dd>
+      <p class="glossary-def">The realtime scheduler. Walks the Node DAG, dispatches ready sub-trees to workers, assembles outputs on the callback thread. No mutex on the critical path.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_LockFreeMultiThreadedNodePlayer.h">modules/tracktion_graph/tracktion_graph/tracktion_LockFreeMultiThreadedNodePlayer.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-loopinfo">
+    <dt><code>LoopInfo</code></dt>
+    <dd>
+      <p class="glossary-def">Loop-specific metadata: tempo, beat markers, root note, time-signature. Drives elastic stretching when a clip is assigned to a different tempo than its native one.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_LoopInfo.h">modules/tracktion_engine/audio_files/tracktion_LoopInfo.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-M">
+<h2 class="glossary-letter">M</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-macroparameter">
+    <dt><code>MacroParameter</code></dt>
+    <dd>
+      <p class="glossary-def">A user-defined parameter that IS an AutomatableParameter. Can be automated, modulated, MIDI-learned, and in turn drives other parameters.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_MacroParameter.h">modules/tracktion_engine/model/automation/tracktion_MacroParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-macroparameterlist">
+    <dt><code>MacroParameterList</code></dt>
+    <dd>
+      <p class="glossary-def">Collection of macros on any MacroParameterElement (Plugin already is one — see diagram 6).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_MacroParameter.h">modules/tracktion_engine/model/automation/tracktion_MacroParameter.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-magic-enum">
+    <dt><code>magic_enum</code></dt>
+    <dd>
+      <p class="glossary-def">Static reflection over enums. Engine-only, used in model .cpp files for string ↔ enum conversion.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/magic_enum">modules/3rd_party/magic_enum</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-marker">
+    <dt><code>Marker</code></dt>
+    <dd>
+      <p class="glossary-def">A pin on the timeline. Loop points, cue points, arrangement markers.</p>
+      <p class="glossary-file mono">model/edit/tracktion_MarkerManager.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-markermanager">
+    <dt><code>MarkerManager</code></dt>
+    <dd>
+      <p class="glossary-def">Owns and orders the Edit's markers.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_MarkerManager.h">modules/tracktion_engine/model/edit/tracktion_MarkerManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-masterpluginlist">
+    <dt><code>masterPluginList</code></dt>
+    <dd>
+      <p class="glossary-def">Plugin list applied after the track sum, before output. Separate from per-track plugin lists.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_PluginList.h">modules/tracktion_engine/plugins/tracktion_PluginList.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-mastervolumeplugin">
+    <dt><code>masterVolumePlugin</code></dt>
+    <dd>
+      <p class="glossary-def">A VolumeAndPanPlugin held as a ReferenceCountedObjectPtr — the final fader stage.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_Plugins.h">modules/tracktion_engine/plugins/internal/tracktion_Plugins.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-memorymappedfilereader">
+    <dt><code>MemoryMappedFileReader</code></dt>
+    <dd>
+      <p class="glossary-def">mmap-backed reader for formats where it's viable — avoids copy overhead.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/formats/tracktion_MemoryMappedFileReader.h">modules/tracktion_engine/audio_files/formats/tracktion_MemoryMappedFileReader.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-message-thread">
+    <dt><code>Message thread</code></dt>
+    <dd>
+      <p class="glossary-def">JUCE message thread. UI, ValueTree dispatch, component repaints. Read-mostly for audio-thread state; coordinates via atomics / AsyncUpdater.</p>
+      <p class="glossary-file mono">(juce)</p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midi-out-queue">
+    <dt><code>MIDI-out queue</code></dt>
+    <dd>
+      <p class="glossary-def">Audio thread pushes timestamped MIDI; MidiNoteDispatcher's timer thread drains it. (Diagram 5, flag 3.)</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h">modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midi-out-timer">
+    <dt><code>MIDI-out timer</code></dt>
+    <dd>
+      <p class="glossary-def">juce::HighResolutionTimer used by MidiNoteDispatcher. Drains the queue the audio thread fills and writes to hardware.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h">modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midiclip">
+    <dt><code>MidiClip</code></dt>
+    <dd>
+      <p class="glossary-def">A Clip on a TrackItemList that owns a MidiList. Holds quantise, transpose, loop, live/channel settings. Becomes a MidiNode at render time.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_MidiClip.h">modules/tracktion_engine/model/clips/tracktion_MidiClip.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midicompmanager">
+    <dt><code>MidiCompManager</code></dt>
+    <dd>
+      <p class="glossary-def">Comp manager for MIDI takes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_CompManager.h">modules/tracktion_engine/model/clips/tracktion_CompManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midicontrollerevent">
+    <dt><code>MidiControllerEvent</code></dt>
+    <dd>
+      <p class="glossary-def">Typed CC event: beat, controller number, value.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiControllerEvent.h">modules/tracktion_engine/midi/tracktion_MidiControllerEvent.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-mididevice">
+    <dt><code>MidiDevice</code></dt>
+    <dd>
+      <p class="glossary-def">External or virtual MIDI in/out. Keyboards, controllers, virtual ports.</p>
+      <p class="glossary-file mono">playback/devices/tracktion_MidiInputDevice.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midiexpression">
+    <dt><code>MidiExpression</code></dt>
+    <dd>
+      <p class="glossary-def">MPE-style per-note expression: pressure, slide, glide. Attached to notes for polyphonic expression.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiExpression.h">modules/tracktion_engine/midi/tracktion_MidiExpression.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midiinputdevice">
+    <dt><code>MidiInputDevice</code></dt>
+    <dd>
+      <p class="glossary-def">A physical or virtual MIDI input. Its events are captured per-instance and fed into the graph as a MidiInputDeviceNode.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.h">modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/07-midi.html">07 midi</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midiinputdevicenode">
+    <dt><code>MidiInputDeviceNode</code></dt>
+    <dd>
+      <p class="glossary-def">Graph-side node for incoming live MIDI. Uses MidiNodeHelpers for time conversion.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_MidiInputDeviceNode.h">modules/tracktion_engine/playback/graph/tracktion_MidiInputDeviceNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midilearnstate">
+    <dt><code>MidiLearnState</code></dt>
+    <dd>
+      <p class="glossary-def">Captures 'the next MIDI message you send maps to this parameter'. Pairs with MidiAssignable for the UI affordance.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_MidiLearn.h">modules/tracktion_engine/model/automation/tracktion_MidiLearn.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midilist">
+    <dt><code>MidiList</code></dt>
+    <dd>
+      <p class="glossary-def">Document-side container of MIDI events on a clip. Holds notes, CCs, sysex, expression, plus channel and musical context (key/scale).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiList.h">modules/tracktion_engine/midi/tracktion_MidiList.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midimodifier">
+    <dt><code>MidiModifier</code></dt>
+    <dd>
+      <p class="glossary-def">Plugin that transforms MIDI inline: transpose, velocity-scale, filter.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_MidiModifier.h">modules/tracktion_engine/plugins/effects/tracktion_MidiModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midinode">
+    <dt><code>MidiNode</code></dt>
+    <dd>
+      <p class="glossary-def">class MidiNode final : public tracktion::graph::Node. Streams events from a MidiList into the graph each block. Handles looping, offsets, live mode.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_MidiNode.h">modules/tracktion_engine/playback/graph/tracktion_MidiNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midinodehelpers">
+    <dt><code>MidiNodeHelpers</code></dt>
+    <dd>
+      <p class="glossary-def">Shared helpers used by MidiNode, MidiInputDeviceNode, CombiningNode (MIDI path). Time-range conversion, block iteration, MPE trim at clip boundaries.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_MidiNodeHelpers.h">modules/tracktion_engine/playback/graph/tracktion_MidiNodeHelpers.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midinote">
+    <dt><code>MidiNote</code></dt>
+    <dd>
+      <p class="glossary-def">Typed note event: start beat, length, pitch, velocity, mute, colour. Not a raw juce::MidiMessage — structured so the editor and automation pipeline can reason about it directly.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiNote.h">modules/tracktion_engine/midi/tracktion_MidiNote.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midinotedispatcher">
+    <dt><code>MidiNoteDispatcher</code></dt>
+    <dd>
+      <p class="glossary-def">Runs MIDI output on its OWN thread. Declared 'class MidiNoteDispatcher : private juce::HighResolutionTimer'. The audio thread queues timestamped messages; hiResTimerCallback() writes them to devices.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h">modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midioutputdevice">
+    <dt><code>MidiOutputDevice</code></dt>
+    <dd>
+      <p class="glossary-def">A physical or virtual MIDI output. Receives messages scheduled by the graph.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_MidiOutputDevice.h">modules/tracktion_engine/playback/devices/tracktion_MidiOutputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midioutputdeviceinstanceinjectingnode">
+    <dt><code>MidiOutputDeviceInstanceInjectingNode</code></dt>
+    <dd>
+      <p class="glossary-def">Injects the graph's MIDI into a specific output-device instance at the right moment in the block.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_MidiOutputDeviceInstanceInjectingNode.h">modules/tracktion_engine/playback/graph/tracktion_MidiOutputDeviceInstanceInjectingNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midipatchbay">
+    <dt><code>MidiPatchBay</code></dt>
+    <dd>
+      <p class="glossary-def">Plugin that reroutes MIDI channels inside the track chain.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_MidiPatchBay.h">modules/tracktion_engine/plugins/effects/tracktion_MidiPatchBay.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midiprogrammanager">
+    <dt><code>MidiProgramManager</code></dt>
+    <dd>
+      <p class="glossary-def">Program-change metadata. Soundfont-style program naming so the UI can show 'Grand Piano' instead of 'PC #0'.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiProgramManager.h">modules/tracktion_engine/midi/tracktion_MidiProgramManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-midisysexevent">
+    <dt><code>MidiSysexEvent</code></dt>
+    <dd>
+      <p class="glossary-def">Typed sysex event: timestamp plus byte payload.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_MidiSysexEvent.h">modules/tracktion_engine/midi/tracktion_MidiSysexEvent.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-modifier">
+    <dt><code>Modifier</code></dt>
+    <dd>
+      <p class="glossary-def">Base. struct Modifier : AutomatableEditItem — a modifier's output can itself be automated. Lives in a track's ModifierList; becomes a ModifierNode (diagram 4) at render time.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_Modifier.h">modules/tracktion_engine/model/automation/tracktion_Modifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-modifierlist">
+    <dt><code>ModifierList</code></dt>
+    <dd>
+      <p class="glossary-def">Per-track collection of modifiers. Siblings to plugins in the track UI.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_Modifier.h">modules/tracktion_engine/model/automation/tracktion_Modifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-modifiernode">
+    <dt><code>ModifierNode</code></dt>
+    <dd>
+      <p class="glossary-def">Hosts a Modifier (LFO, envelope follower, etc) that drives parameters.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_ModifierNode.h">modules/tracktion_engine/playback/graph/tracktion_ModifierNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-modifiertimer">
+    <dt><code>ModifierTimer</code></dt>
+    <dd>
+      <p class="glossary-def">Shared clock abstraction for modifiers — converts block time to modifier phase so LFO/envelope/step all use the same time source.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_Modifier.h">modules/tracktion_engine/model/automation/tracktion_Modifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-moodycamel">
+    <dt><code>moodycamel</code></dt>
+    <dd>
+      <p class="glossary-def">ConcurrentQueue + LightweightSemaphore. Lives in tracktion_graph/3rd_party/ (not the top-level 3rd_party/) — graph's own realtime toolkit.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/3rd_party/concurrentqueue.h">modules/tracktion_graph/3rd_party/concurrentqueue.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-moodycamel-concurrentqueue">
+    <dt><code>moodycamel::ConcurrentQueue</code></dt>
+    <dd>
+      <p class="glossary-def">MPMC lock-free queue. Used for general inter-thread messaging where multiple producers exist.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/3rd_party/concurrentqueue.h">modules/tracktion_graph/3rd_party/concurrentqueue.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-multiplewriterseqlock">
+    <dt><code>MultipleWriterSeqLock</code></dt>
+    <dd>
+      <p class="glossary-def">Tracktion's own sequence lock. A few writers update infrequently; many readers (UI, audio) poll. Used where Link and parameter writes meet the audio thread.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_core/threads/tracktion_MultipleWriterSeqLock.h">modules/tracktion_core/threads/tracktion_MultipleWriterSeqLock.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-multithreadednodeplayer">
+    <dt><code>MultiThreadedNodePlayer</code></dt>
+    <dd>
+      <p class="glossary-def">Multi-threaded player. Splits independent sub-graphs across workers.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_MultiThreadedNodePlayer.h">modules/tracktion_graph/tracktion_graph/tracktion_MultiThreadedNodePlayer.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-N">
+<h2 class="glossary-letter">N</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-nanorange">
+    <dt><code>nanorange</code></dt>
+    <dd>
+      <p class="glossary-def">C++20 ranges subset for older toolchains. Engine-only.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/nanorange">modules/3rd_party/nanorange</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-nested-edit">
+    <dt><code>Nested Edit</code></dt>
+    <dd>
+      <p class="glossary-def">An EditClip hosts another Edit. EditClipRenderJob produces a rendered file the parent graph plays — no recursive realtime.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h">modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-node">
+    <dt><code>Node</code></dt>
+    <dd>
+      <p class="glossary-def">The abstract base — every vertex in the graph. Lives in tracktion_graph. Declares process(), prepareToPlay(), getNodeProperties(), isReadyToProcess().</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_Node.h">modules/tracktion_graph/tracktion_graph/tracktion_Node.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-nodeplayer">
+    <dt><code>NodePlayer</code></dt>
+    <dd>
+      <p class="glossary-def">The simple single-threaded player — likely what the renderer uses for deterministic output. (See open questions.)</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_NodePlayer.h">modules/tracktion_graph/tracktion_graph/tracktion_NodePlayer.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-nodeplayerthreadpools">
+    <dt><code>NodePlayerThreadPools</code></dt>
+    <dd>
+      <p class="glossary-def">Worker pools consumed by the lock-free player. See diagram 9 for the realtime-safety story.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h">modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-noderendercontext">
+    <dt><code>NodeRenderContext</code></dt>
+    <dd>
+      <p class="glossary-def">Drives a built graph block-by-block at faster-than-realtime speed. Knows sample rate, block size, time range, output file. Replaces the live audio callback.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_NodeRenderContext.h">modules/tracktion_engine/playback/graph/tracktion_NodeRenderContext.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-P">
+<h2 class="glossary-letter">P</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-parameterchangehandler">
+    <dt><code>ParameterChangeHandler</code></dt>
+    <dd>
+      <p class="glossary-def">Fan-in for parameter change notifications. Lets subsystems subscribe once instead of walking the tree.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_ParameterChangeHandler.h">modules/tracktion_engine/model/automation/tracktion_ParameterChangeHandler.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-parametercontrolmappings">
+    <dt><code>ParameterControlMappings</code></dt>
+    <dd>
+      <p class="glossary-def">Persistent assignment store. Both MIDI CCs and control-surface IDs resolve to entries here.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/tracktion_ParameterControlMappings.h">modules/tracktion_engine/model/automation/tracktion_ParameterControlMappings.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-patterngenerator">
+    <dt><code>PatternGenerator</code></dt>
+    <dd>
+      <p class="glossary-def">Generates MIDI notes from a chord/scale/pattern. The algorithmic-MIDI entry point.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_Musicality.h">modules/tracktion_engine/midi/tracktion_Musicality.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-pitchsequence">
+    <dt><code>PitchSequence</code></dt>
+    <dd>
+      <p class="glossary-def">Parallel to TempoSequence but for musical key. Used by pitched clips and helpers.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_PitchSequence.h">modules/tracktion_engine/model/edit/tracktion_PitchSequence.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-pitchsetting">
+    <dt><code>PitchSetting</code></dt>
+    <dd>
+      <p class="glossary-def">One key change on the pitch timeline.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_PitchSetting.h">modules/tracktion_engine/model/edit/tracktion_PitchSetting.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-playhead">
+    <dt><code>PlayHead</code></dt>
+    <dd>
+      <p class="glossary-def">The time authority. Lives in tracktion_graph. setPosition(int64_t), play(Range&lt;int64_t&gt;, looped), stop; atomic speed / looping / userDragging / rollInToLoop flags; referenceSamplePositionToTimelinePosition. Queried by every processing Node.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h">modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-playhead-atomics">
+    <dt><code>PlayHead atomics</code></dt>
+    <dd>
+      <p class="glossary-def">PlayHead exposes speed / looping / userDragging / rollInToLoop as std::atomic flags. Audio thread reads, UI thread writes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h">modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-plugin">
+    <dt><code>Plugin</code></dt>
+    <dd>
+      <p class="glossary-def">Abstract base. Extends Selectable, ReferenceCountedObject, Exportable, AutomatableEditItem, MacroParameterElement. Pure virtuals: initialise(PluginInitialisationInfo), deinitialise(), applyToBuffer(PluginRenderContext).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_Plugin.h">modules/tracktion_engine/plugins/tracktion_Plugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-plugin-scan-child">
+    <dt><code>Plugin-scan child</code></dt>
+    <dd>
+      <p class="glossary-def">Optional separate process used to scan plugins (crash isolation). See diagram 6 — PluginManager::usesSeparateProcessForScanning.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_PluginManager.h">modules/tracktion_engine/plugins/tracktion_PluginManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-plugincache">
+    <dt><code>PluginCache</code></dt>
+    <dd>
+      <p class="glossary-def">Per-Edit ref-counted cache. getPluginFor(EditItemID), getOrCreatePluginFor(ValueTree), createNewPlugin. Hands out Plugin::Ptr instances keyed by their ValueTree row.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_PluginManager.h">modules/tracktion_engine/plugins/tracktion_PluginManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-pluginlist">
+    <dt><code>PluginList</code></dt>
+    <dd>
+      <p class="glossary-def">The track-level ordered list of plugins. Owns the ValueTree children for a track's plugin chain and maintains the order the graph builder walks.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_PluginList.h">modules/tracktion_engine/plugins/tracktion_PluginList.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-pluginmanager">
+    <dt><code>PluginManager</code></dt>
+    <dd>
+      <p class="glossary-def">Engine-owned registry. Wraps juce::AudioPluginFormatManager + KnownPluginList. Holds a list of BuiltInType factories for engine-native plugins. Callback createPluginInstance(description, rate, blockSize, err) is the customisation hook.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/tracktion_PluginManager.h">modules/tracktion_engine/plugins/tracktion_PluginManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-pluginnode">
+    <dt><code>PluginNode</code></dt>
+    <dd>
+      <p class="glossary-def">Hosts a plugin in the graph. See diagram 6.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_PluginNode.h">modules/tracktion_engine/playback/graph/tracktion_PluginNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-postposition">
+    <dt><code>postPosition</code></dt>
+    <dd>
+      <p class="glossary-def">EditPlaybackContext's way of taking a UI-thread 'please jump to X' and applying it safely at the start of the next block.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h">modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-processstate">
+    <dt><code>ProcessState</code></dt>
+    <dd>
+      <p class="glossary-def">Shared state threaded through every Node during process(): sample rate, block size, current play range, sync info. Part of the CreateNodeParams contract.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_TracktionEngineNode.h">modules/tracktion_engine/playback/graph/tracktion_TracktionEngineNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-R">
+<h2 class="glossary-letter">R</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-rack">
+    <dt><code>Rack</code></dt>
+    <dd>
+      <p class="glossary-def">A plugin whose body is a sub-graph of other plugins. Modular synth inside a single slot.</p>
+      <p class="glossary-file mono">plugins/internal/tracktion_RackType.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rackinstance">
+    <dt><code>RackInstance</code></dt>
+    <dd>
+      <p class="glossary-def">Track-side plugin that points at a shared RackType. Becomes a RackInstanceNode at render time.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_RackInstance.h">modules/tracktion_engine/plugins/internal/tracktion_RackInstance.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rackinstancenode">
+    <dt><code>RackInstanceNode</code></dt>
+    <dd>
+      <p class="glossary-def">A track-side reference to a shared RackNode. Multiple instances route into the same sub-graph.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_RackInstanceNode.h">modules/tracktion_engine/playback/graph/tracktion_RackInstanceNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-racknode">
+    <dt><code>RackNode</code></dt>
+    <dd>
+      <p class="glossary-def">A rack type rendered as a sub-graph. Inputs come from its RackInstanceNodes, outputs go out through a RackReturnNode.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_RackNode.h">modules/tracktion_engine/playback/graph/tracktion_RackNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rackreturnnode">
+    <dt><code>RackReturnNode</code></dt>
+    <dd>
+      <p class="glossary-def">The output side of a rack sub-graph — where audio leaves the rack and enters its caller's graph.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_RackReturnNode.h">modules/tracktion_engine/playback/graph/tracktion_RackReturnNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-racktype">
+    <dt><code>RackType</code></dt>
+    <dd>
+      <p class="glossary-def">One rack definition. Instances of it appear as RackInstance plugins on tracks. See diagram 6 for the duality.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_RackType.h">modules/tracktion_engine/plugins/internal/tracktion_RackType.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-racktypelist">
+    <dt><code>RackTypeList</code></dt>
+    <dd>
+      <p class="glossary-def">Owns the Edit's rack definitions (reusable sub-graphs of plugins).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_RackType.h">modules/tracktion_engine/plugins/internal/tracktion_RackType.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-randommodifier">
+    <dt><code>RandomModifier</code></dt>
+    <dd>
+      <p class="glossary-def">Shipped modifier: randomised value with smoothing.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/modifiers/tracktion_RandomModifier.h">modules/tracktion_engine/model/automation/modifiers/tracktion_RandomModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-readaheadtimestretcher">
+    <dt><code>ReadAheadTimeStretcher</code></dt>
+    <dd>
+      <p class="glossary-def">Read-ahead wrapper used at playback by TimeStretchingWaveNode. Source file has 'TEMPORARY' flags — still being tuned (see diagram 4 open questions).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h">modules/tracktion_engine/timestretch/tracktion_ReadAheadTimeStretcher.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-record">
+    <dt><code>Record</code></dt>
+    <dd>
+      <p class="glossary-def">The other half of Transport — captures incoming audio or MIDI into a new clip.</p>
+      <p class="glossary-file mono">model/automation/tracktion_AutomationRecordManager.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-recordingcontext">
+    <dt><code>RecordingContext</code></dt>
+    <dd>
+      <p class="glossary-def">Per-take state: start time, punch in/out, file being written. Base class; WaveRecordingContext and MidiRecordingContext specialise it.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_InputDevice.h">modules/tracktion_engine/playback/devices/tracktion_InputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-recordingthumbnailmanager">
+    <dt><code>RecordingThumbnailManager</code></dt>
+    <dd>
+      <p class="glossary-def">Feeds live waveform thumbnails to the UI while recording, so the user sees the track filling in.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_RecordingThumbnailManager.h">modules/tracktion_engine/audio_files/tracktion_RecordingThumbnailManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-recordstopper">
+    <dt><code>RecordStopper</code></dt>
+    <dd>
+      <p class="glossary-def">Helper that coordinates MIDI record stop — ensures in-flight note-offs land before the clip boundary.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.cpp">modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.cpp</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-render">
+    <dt><code>Render</code></dt>
+    <dd>
+      <p class="glossary-def">Offline render. Same graph as playback, run faster-than-realtime into a file.</p>
+      <p class="glossary-file mono">model/export/tracktion_Renderer.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-renderer">
+    <dt><code>Renderer</code></dt>
+    <dd>
+      <p class="glossary-def">Public entry point. Takes a RenderOptions and produces a file. Synchronous and async variants.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_Renderer.h">modules/tracktion_engine/model/export/tracktion_Renderer.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-renderer-diagram-12">
+    <dt><code>Renderer (diagram 12)</code></dt>
+    <dd>
+      <p class="glossary-def">Freeze uses the same render pipeline as offline export — createNodeForEdit(Edit&amp;, ...) to build a tree, then pull samples into a file.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/tree/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/render/">modules/tracktion_engine/audio_files/render/</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rendermanager">
+    <dt><code>RenderManager</code></dt>
+    <dd>
+      <p class="glossary-def">juce::DeletedAtShutdown singleton. Owns the thread pool, queues render jobs, ensures no two renders target the same output file at once.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_RenderManager.h">modules/tracktion_engine/model/export/tracktion_RenderManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-renderoptions">
+    <dt><code>RenderOptions</code></dt>
+    <dd>
+      <p class="glossary-def">Value-tree-backed options: format, bit depth, sample rate, time range, tracks, normalise, dither.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_RenderOptions.h">modules/tracktion_engine/model/export/tracktion_RenderOptions.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-retrospectivebuffer">
+    <dt><code>retrospectiveBuffer</code></dt>
+    <dd>
+      <p class="glossary-def">A ring buffer on every InputDevice holding the last N seconds of input. Default 30 s via SettingID::retrospectiveRecord. retrospectiveRecordLock prevents clobbering while UI decides.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_InputDevice.h">modules/tracktion_engine/playback/devices/tracktion_InputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-reverb">
+    <dt><code>Reverb</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in reverb.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_Reverb.h">modules/tracktion_engine/plugins/effects/tracktion_Reverb.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-reverserenderjob">
+    <dt><code>ReverseRenderJob</code></dt>
+    <dd>
+      <p class="glossary-def">Writes a reversed-audio file for a clip. Implemented as a render because reversing while preserving fades/crossfades is non-trivial.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_ReverseRenderJob.h">modules/tracktion_engine/model/clips/tracktion_ReverseRenderJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rewireplugin">
+    <dt><code>ReWirePlugin</code></dt>
+    <dd>
+      <p class="glossary-def">ReWire-protocol integration (legacy sync/audio bridge).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_ReWirePlugin.h">modules/tracktion_engine/plugins/internal/tracktion_ReWirePlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rexfileformat">
+    <dt><code>RexFileFormat</code></dt>
+    <dd>
+      <p class="glossary-def">Propellerhead REX slice support.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/formats/tracktion_RexFileFormat.h">modules/tracktion_engine/audio_files/formats/tracktion_RexFileFormat.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rigtorp">
+    <dt><code>rigtorp</code></dt>
+    <dd>
+      <p class="glossary-def">Erik Rigtorp's SPSC queue and other lock-free primitives. Graph-only.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/3rd_party/rigtorp">modules/3rd_party/rigtorp</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rigtorp-spsc">
+    <dt><code>rigtorp SPSC</code></dt>
+    <dd>
+      <p class="glossary-def">Single-producer / single-consumer queue used where the stronger MPMC is not needed.</p>
+      <p class="glossary-file mono">(submodule in tracktion_engine/3rd_party)</p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-rpmalloc">
+    <dt><code>rpmalloc</code></dt>
+    <dd>
+      <p class="glossary-def">Realtime-friendly allocator. Used where audio-thread-adjacent paths need allocation behaviour more predictable than the system allocator.</p>
+      <p class="glossary-file mono">(submodule in tracktion_engine/3rd_party)</p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a> · <a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-S">
+<h2 class="glossary-letter">S</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-samplerplugin">
+    <dt><code>SamplerPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in sampler.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_SamplerPlugin.h">modules/tracktion_engine/plugins/effects/tracktion_SamplerPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-scale">
+    <dt><code>Scale</code></dt>
+    <dd>
+      <p class="glossary-def">Scale / mode representation. Used for piano-roll scale highlighting and key analysis.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/midi/tracktion_Musicality.h">modules/tracktion_engine/midi/tracktion_Musicality.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/07-midi.html">07 midi</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-scene">
+    <dt><code>Scene</code></dt>
+    <dd>
+      <p class="glossary-def">Ableton-style horizontal grouping. Launch a row of clips across many tracks with one gesture.</p>
+      <p class="glossary-file mono">model/edit/tracktion_Scene.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-scenelist">
+    <dt><code>SceneList</code></dt>
+    <dd>
+      <p class="glossary-def">Ableton-style clip launcher grid rows. Only populated if the Edit uses scenes.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Scene.h">modules/tracktion_engine/model/edit/tracktion_Scene.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-scopedsteadyload">
+    <dt><code>ScopedSteadyLoad</code></dt>
+    <dd>
+      <p class="glossary-def">RAII scope that bounds audio-thread work under CPU stress. Protects against runaway blocks.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_ScopedSteadyLoad.h">modules/tracktion_engine/playback/tracktion_ScopedSteadyLoad.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-smartthumbnail">
+    <dt><code>SmartThumbnail</code></dt>
+    <dd>
+      <p class="glossary-def">Waveform thumbnail cache used by the editor UI. RecordingThumbnailManager handles live recording.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/audio_files/tracktion_SmartThumbnail.h">modules/tracktion_engine/audio_files/tracktion_SmartThumbnail.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-state-valuetree">
+    <dt><code>state : ValueTree</code></dt>
+    <dd>
+      <p class="glossary-def">The primary state tree (IDs::EDIT root). Everything persisted about the Edit lives here. The C++ objects below are typed views over slices of this tree.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Edit.h">modules/tracktion_engine/model/edit/tracktion_Edit.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-stems-export">
+    <dt><code>Stems export</code></dt>
+    <dd>
+      <p class="glossary-def">Same EditRenderer with per-track filtering. Produces one file per track or per stem group.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/export/tracktion_RenderOptions.h">modules/tracktion_engine/model/export/tracktion_RenderOptions.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-stepmodifier">
+    <dt><code>StepModifier</code></dt>
+    <dd>
+      <p class="glossary-def">Shipped modifier: step-sequencer-style pattern.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/automation/modifiers/tracktion_StepModifier.h">modules/tracktion_engine/model/automation/modifiers/tracktion_StepModifier.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/11-automation.html">11 automation</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-summingnode">
+    <dt><code>SummingNode</code></dt>
+    <dd>
+      <p class="glossary-def">Generic mixer. Sums N inputs into one output. Used anywhere multiple channels converge.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/nodes/tracktion_SummingNode.h">modules/tracktion_graph/tracktion_graph/nodes/tracktion_SummingNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-T">
+<h2 class="glossary-letter">T</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-tempodetect">
+    <dt><code>TempoDetect</code></dt>
+    <dd>
+      <p class="glossary-def">Tempo estimation used by the loop-import flow.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/timestretch/tracktion_TempoDetect.h">modules/tracktion_engine/timestretch/tracktion_TempoDetect.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-temposequence">
+    <dt><code>TempoSequence</code></dt>
+    <dd>
+      <p class="glossary-def">The tempo map. Held by value on Edit. Converts between beats and seconds everywhere else in the engine.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_TempoSequence.h">modules/tracktion_engine/model/edit/tracktion_TempoSequence.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-temposetting">
+    <dt><code>TempoSetting</code></dt>
+    <dd>
+      <p class="glossary-def">One BPM change on the tempo timeline.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_TempoSetting.h">modules/tracktion_engine/model/edit/tracktion_TempoSetting.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-textplugin">
+    <dt><code>TextPlugin</code></dt>
+    <dd>
+      <p class="glossary-def">A non-processing plugin that holds a text note in the track chain.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_TextPlugin.h">modules/tracktion_engine/plugins/internal/tracktion_TextPlugin.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-threadpoolcreator">
+    <dt><code>ThreadPoolCreator</code></dt>
+    <dd>
+      <p class="glossary-def">Embedder-selected pool strategy: conditionVariable / realTime / hybrid / semaphore / lightweightSemaphore / lightweightSemHybrid. Trades idle-CPU vs wake-up latency.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h">modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-timesigsetting">
+    <dt><code>TimeSigSetting</code></dt>
+    <dd>
+      <p class="glossary-def">One time-signature change on the tempo timeline.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_TimeSigSetting.h">modules/tracktion_engine/model/edit/tracktion_TimeSigSetting.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-timestretcher">
+    <dt><code>TimeStretcher</code></dt>
+    <dd>
+      <p class="glossary-def">Facade over multiple time-stretch libraries. Mode enum picks Elastique, RubberBand, SoundTouch, or ARA — each behind its own compile-time flag.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/timestretch/tracktion_TimeStretch.h">modules/tracktion_engine/timestretch/tracktion_TimeStretch.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-timestretchingwavenode">
+    <dt><code>TimeStretchingWaveNode</code></dt>
+    <dd>
+      <p class="glossary-def">WaveNode variant that routes samples through a ReadAheadTimeStretcher before emitting.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_TimeStretchingWaveNode.h">modules/tracktion_engine/playback/graph/tracktion_TimeStretchingWaveNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-tonegenerator">
+    <dt><code>ToneGenerator</code></dt>
+    <dd>
+      <p class="glossary-def">Built-in test-signal generator.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/effects/tracktion_ToneGenerator.h">modules/tracktion_engine/plugins/effects/tracktion_ToneGenerator.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-track">
+    <dt><code>Track</code></dt>
+    <dd>
+      <p class="glossary-def">A track in the arrangement. Polymorphic (audio/MIDI/folder/marker/chord/tempo). Holds its own plugin list, modifiers, and optionally a sub-TrackList.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/tracks/tracktion_Track.h">modules/tracktion_engine/model/tracks/tracktion_Track.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a> · <a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-track-freeze">
+    <dt><code>Track freeze</code></dt>
+    <dd>
+      <p class="glossary-def">Diagram 10's freeze uses this pipeline to bake a track to disk. FreezePointPlugin decides the cut; EditRenderJob produces the file.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h">modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-trackcompmanager">
+    <dt><code>TrackCompManager</code></dt>
+    <dd>
+      <p class="glossary-def">Track-level comp metadata. Ties takes on a track together so the editor UI can present them as one comp.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/tracks/tracktion_TrackCompManager.h">modules/tracktion_engine/model/tracks/tracktion_TrackCompManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-tracklist">
+    <dt><code>TrackList</code></dt>
+    <dd>
+      <p class="glossary-def">ValueTreeObjectList&lt;Track&gt;. Edit owns one at the top; each Track may own another (see recursion flag).</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/tracks/tracktion_TrackUtils.h">modules/tracktion_engine/model/tracks/tracktion_TrackUtils.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-tracktion-core">
+    <dt><code>tracktion_core</code></dt>
+    <dd>
+      <p class="glossary-def">Foundation types: strongly-typed Time/TimeRange/Tempo, abstract AudioReader, multi-writer seqlock. No DAW concepts.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_core/tracktion_core.h">modules/tracktion_core/tracktion_core.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-tracktion-engine">
+    <dt><code>tracktion_engine</code></dt>
+    <dd>
+      <p class="glossary-def">The DAW. model/ + playback/ + plugins/ + midi/ + audio_files/ + project/ + export/ + control_surfaces/. This is where Edit, Track, Clip, and Plugin live.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/tracktion_engine.h">modules/tracktion_engine/tracktion_engine.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-tracktion-graph">
+    <dt><code>tracktion_graph</code></dt>
+    <dd>
+      <p class="glossary-def">Generic realtime DAG processor. Node base, built-in node types, lock-free multi-threaded player, PlayHead. DAW-agnostic by design.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_graph/tracktion_graph.h">modules/tracktion_graph/tracktion_graph.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/02-module-graph.html">02 modules</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-transport">
+    <dt><code>Transport</code></dt>
+    <dd>
+      <p class="glossary-def">Play, stop, record, loop. The user's remote control for time.</p>
+      <p class="glossary-file mono">playback/tracktion_TransportControl.h</p>
+      <p class="glossary-refs"><a href="diagrams/01-daw-concepts.html">01 concepts</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-transportcontrol">
+    <dt><code>TransportControl</code></dt>
+    <dd>
+      <p class="glossary-def">The public facade. play/record/stop, setPosition, setLoopRange, ensureContextAllocated, freePlaybackContext. Constructed TransportControl(Edit&amp;, const juce::ValueTree&amp;). Every UI affordance for transport ends up calling a method here.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_TransportControl.h">modules/tracktion_engine/playback/tracktion_TransportControl.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a> · <a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-U">
+<h2 class="glossary-letter">U</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-ui-drag-interaction">
+    <dt><code>UI drag / interaction</code></dt>
+    <dd>
+      <p class="glossary-def">Usually the message thread, but called out separately because UI-driven transport changes (drag to scrub) hit EditPlaybackContext.postPosition on this thread.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h">modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-undomanager">
+    <dt><code>UndoManager</code></dt>
+    <dd>
+      <p class="glossary-def">Held by value on Edit. Every ValueTree mutation flows through it, so 'the Edit' and 'the undo scope' are the same thing.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/edit/tracktion_Edit.h">modules/tracktion_engine/model/edit/tracktion_Edit.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/03-the-edit.html">03 edit</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-user-export">
+    <dt><code>User export</code></dt>
+    <dd>
+      <p class="glossary-def">File → Export menu. Produces final delivery files via EditRenderer + RenderOptions.</p>
+      <p class="glossary-file mono">(UI — consumer)</p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-V">
+<h2 class="glossary-letter">V</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-valuetree-listeners">
+    <dt><code>ValueTree listeners</code></dt>
+    <dd>
+      <p class="glossary-def">Message-thread-only change-dispatch. UI writes → ValueTree → engine-side listeners set atomic flags the audio thread observes.</p>
+      <p class="glossary-file mono">(juce + model/edit)</p>
+      <p class="glossary-refs"><a href="diagrams/09-threading.html">09 threading</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-vca">
+    <dt><code>VCA</code></dt>
+    <dd>
+      <p class="glossary-def">Voltage-controlled-amplifier-style gain plugin used for folder/group control.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_VCA.h">modules/tracktion_engine/plugins/internal/tracktion_VCA.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-volumeandpan">
+    <dt><code>VolumeAndPan</code></dt>
+    <dd>
+      <p class="glossary-def">The track-level volume/pan plugin. Every audio track has one by default.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/plugins/internal/tracktion_VolumeAndPan.h">modules/tracktion_engine/plugins/internal/tracktion_VolumeAndPan.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/06-plugins.html">06 plugins</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+<section class="glossary-section" id="sec-W">
+<h2 class="glossary-letter">W</h2>
+<dl class="glossary-list">
+  <div class="glossary-entry" id="g-warptimerenderjob">
+    <dt><code>WarpTimeRenderJob</code></dt>
+    <dd>
+      <p class="glossary-def">Bakes warp-time edits (draggable time-stretch markers) into a new audio file that replaces the clip's source.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_WarpTimeRenderJob.h">modules/tracktion_engine/model/clips/tracktion_WarpTimeRenderJob.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/12-rendering.html">12 rendering</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-waveaudioclip">
+    <dt><code>WaveAudioClip</code></dt>
+    <dd>
+      <p class="glossary-def">The document result of wave recording: a clip on the track referencing the newly written file.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_WaveAudioClip.h">modules/tracktion_engine/model/clips/tracktion_WaveAudioClip.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-wavecompmanager">
+    <dt><code>WaveCompManager</code></dt>
+    <dd>
+      <p class="glossary-def">Comp manager for wave takes. Picks sections from sibling WaveAudioClips to form comped playback.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/model/clips/tracktion_CompManager.h">modules/tracktion_engine/model/clips/tracktion_CompManager.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-waveinputdevice">
+    <dt><code>WaveInputDevice</code></dt>
+    <dd>
+      <p class="glossary-def">A physical or virtual audio-in channel. EditPlaybackContext spins up per-instance objects (WaveInputDeviceInstance) to read from it during a session.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h">modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a> · <a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-waveinputdevicenode">
+    <dt><code>WaveInputDeviceNode</code></dt>
+    <dd>
+      <p class="glossary-def">Emits live audio captured from a WaveInputDevice into the graph.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_WaveInputDeviceNode.h">modules/tracktion_engine/playback/graph/tracktion_WaveInputDeviceNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-waveinputrecordingthread">
+    <dt><code>WaveInputRecordingThread</code></dt>
+    <dd>
+      <p class="glossary-def">juce::Thread that owns the audio-file writes. The audio callback pushes samples into a FIFO; this thread drains it into the WAV.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h">modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/10-recording-comping.html">10 recording</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-wavenode">
+    <dt><code>WaveNode</code></dt>
+    <dd>
+      <p class="glossary-def">The graph consumer. Pulls samples from AudioFileCache each block. See diagram 4.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/graph/tracktion_WaveNode.h">modules/tracktion_engine/playback/graph/tracktion_WaveNode.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/04-rendering-graph.html">04 graph</a> · <a href="diagrams/08-audio-files.html">08 audio files</a></p>
+    </dd>
+  </div>
+  <div class="glossary-entry" id="g-waveoutputdevice">
+    <dt><code>WaveOutputDevice</code></dt>
+    <dd>
+      <p class="glossary-def">An audio-out channel. The destination of the played-back audio graph.</p>
+      <p class="glossary-file mono"><a href="https://github.com/Tracktion/tracktion_engine/blob/2877b621f2fbee564d0696a616b86bf8ba8c8ab0/modules/tracktion_engine/playback/devices/tracktion_WaveOutputDevice.h">modules/tracktion_engine/playback/devices/tracktion_WaveOutputDevice.h</a></p>
+      <p class="glossary-refs"><a href="diagrams/05-transport.html">05 transport</a></p>
+    </dd>
+  </div>
+</dl>
+</section>
+
+
+  <hr />
+  <p class="mono" style="color:var(--text-faint);font-size:0.85rem;">
+    Source links point at commit <a href="https://github.com/Tracktion/tracktion_engine/commit/2877b621f2fbee564d0696a616b86bf8ba8c8ab0"><code>2877b621</code></a>.
+    If a definition feels thin, click through to the diagram — the surrounding
+    flags and flows are where the story lives.
+  </p>
+</main>
+
+</body>
+</html>

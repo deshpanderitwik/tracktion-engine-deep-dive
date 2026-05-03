@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MIDI pipeline — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="06-plugins.html">prev</a>
+    <a href="08-audio-files.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">07 · MIDI</div>
+    <h1>The MIDI pipeline</h1>
+    <p class="lede">
+      MIDI follows the same shape as audio but with its own data
+      types. <code>MidiList</code> is the document-side store;
+      <code>MidiNode</code> streams it into the graph; live input
+      comes from <code>MidiInputDevice</code> and out through
+      <code>MidiNoteDispatcher</code> on its own thread.
+      Musicality — chords, scales, patterns — sits on top as the
+      higher-level layer.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: document, streamer, dispatcher</h2>
+    <p>
+      MIDI in Tracktion Engine has three layers with sharp edges
+      between them. At the top, the <em>document layer</em> —
+      <code>MidiList</code>, <code>MidiNote</code>,
+      <code>MidiControllerEvent</code>, <code>MidiSysexEvent</code>,
+      <code>MidiExpression</code> — lives in
+      <code>tracktion_engine/midi/</code>. It's pure data, backed by
+      ValueTree rows, edited by the UI, serialised to the Edit.
+    </p>
+    <p>
+      In the middle, the <em>streamer</em>. A <code>MidiClip</code>
+      on a track owns a <code>MidiList</code>. At render time
+      <code>createNodeForEdit</code> turns each <code>MidiClip</code>
+      into a <code>MidiNode</code> — a Node subclass that pulls
+      events out of the list, loops, offsets, and emits them into the
+      graph as timestamped messages. <code>ActiveNoteList</code>
+      tracks the note-on/note-off balance so the node can issue
+      correct note-offs across loop boundaries and stops.
+    </p>
+    <p>
+      At the bottom, the <em>dispatcher</em>. Outbound MIDI leaves the
+      graph via <code>MidiOutputDeviceInstanceInjectingNode</code> and
+      <code>LiveMidiOutputNode</code>, gets queued, and is sent to
+      hardware by <code>MidiNoteDispatcher</code> on its own
+      <code>juce::HighResolutionTimer</code> thread (flagged in
+      diagram 5). Inbound MIDI from
+      <code>MidiInputDevice</code> enters the graph through
+      <code>MidiInputDeviceNode</code>.
+    </p>
+
+    <h2>Implementation: each layer has its own event type</h2>
+    <p>
+      The document layer has typed events, not raw
+      <code>juce::MidiMessage</code>s. <code>MidiNote</code> carries
+      start beat, length, pitch, velocity, mute flag, and colour;
+      <code>MidiControllerEvent</code> is (beat, controller number,
+      value); <code>MidiSysexEvent</code> carries a byte vector;
+      <code>MidiExpression</code> captures MPE per-note expression
+      (slide, pressure, glide). <code>MidiList</code> also tracks
+      channel and musical context (key, scale) so the editor can
+      reason about chords and scale-degrees.
+    </p>
+    <p>
+      The graph-side <code>MidiNode</code> is a
+      <code>tracktion::graph::Node final</code> that sits alongside
+      <code>WaveNode</code> from diagram 4. It needs a quantise mode,
+      a live-input flag, and the <code>MidiList</code> to walk. Per
+      block it figures out the block's time range in beats, asks the
+      list for events in that range, translates them to sample offsets
+      within the block, and emits them. <code>MidiNodeHelpers</code>
+      is the shared helper code that <code>MidiNode</code>,
+      <code>MidiInputDeviceNode</code>, and the combining node all
+      use — time-range to event-range conversion, active-note
+      accounting, MPE trim at clip boundaries.
+    </p>
+    <p>
+      <code>MidiPatchBay</code> and <code>MidiModifier</code> live in
+      <code>plugins/effects/</code> and are Plugin subclasses that
+      transform MIDI inline: patch-bay routes channels, modifier
+      transposes / velocity-scales / filters. They appear in the
+      track plugin list like any other effect (diagram 6, flag 1).
+    </p>
+    <p>
+      Above the raw event layer sits <em>Musicality</em>
+      (<code>tracktion_Musicality.h</code>): <code>Chord</code>,
+      <code>Scale</code>, <code>PatternGenerator</code>,
+      <code>KeyResult</code>. These let the engine and UI reason about
+      MIDI musically — what key a clip is in, what chord a selection
+      implies, what notes a generated pattern should produce.
+      <code>MidiProgramManager</code> handles program-change metadata
+      (soundfont-style program naming).
+    </p>
+
+    <h2>Tradeoff: typed events vs. flat MidiMessage</h2>
+    <p>
+      Using typed event classes (<code>MidiNote</code>,
+      <code>MidiControllerEvent</code>) instead of flat
+      <code>juce::MidiMessage</code>s in the document costs some
+      translation at the boundary — <code>MidiNode</code> has to
+      convert typed events back into <code>juce::MidiMessage</code>
+      for hosting plugins and devices. The upside is that editing,
+      undo, MPE semantics, and the UI all get structured data:
+      selecting a note in the piano roll is selecting a
+      <code>MidiNote</code>, not parsing a triplet of
+      <code>MidiMessage</code>s. Given how much editor work relies on
+      that structure, the translation cost is clearly worth it.
+    </p>
+    <p>
+      The dispatcher split (MIDI-out on a timer thread, not the audio
+      thread) was covered as a flag in diagram 5; it deserves to be
+      re-emphasised here because it's the single most important
+      structural decision in this subsystem.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      <code>MidiExpression</code> and the MPE trim logic in
+      <code>MPEStartTrimmer.h</code> hint that MPE support got added
+      later and required careful handling around clip starts. How
+      cleanly does the existing <code>ActiveNoteList</code> reconcile
+      MPE expression events when a note is trimmed mid-flight? Worth
+      a closer read before the glossary page.
+    </p>
+    <p class="note">
+      Notable omission: this diagram does not cover
+      <code>MidiPatchBay</code>'s routing matrix in detail, nor the
+      virtual-MIDI-input behaviour that
+      <code>VirtualMidiInputDevice</code> provides. Those are
+      device-adjacent; the transport diagram (5) is a better spot.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "doc",      "label": "DOCUMENT (midi/)",             "height": 210 },
+    { "id": "clip",     "label": "EDIT · CLIPS",                 "height": 110 },
+    { "id": "graph",    "label": "GRAPH · STREAMERS & HELPERS",  "height": 120 },
+    { "id": "fx",       "label": "MIDI PLUGINS",                 "height": 110 },
+    { "id": "io",       "label": "DEVICE I/O",                   "height": 110 },
+    { "id": "music",    "label": "MUSICALITY (higher layer)",    "height": 110 }
+  ],
+  "nodes": [
+    { "id": "list",    "lane": "doc", "col": 1, "label": "MidiList",
+      "purpose": "Document-side container of MIDI events on a clip. Holds notes, CCs, sysex, expression, plus channel and musical context (key/scale).",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiList.h" },
+    { "id": "note",    "lane": "doc", "col": 3, "label": "MidiNote",
+      "purpose": "Typed note event: start beat, length, pitch, velocity, mute, colour. Not a raw juce::MidiMessage — structured so the editor and automation pipeline can reason about it directly.",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiNote.h" },
+    { "id": "cc",      "lane": "doc", "col": 5, "label": "MidiControllerEvent",
+      "purpose": "Typed CC event: beat, controller number, value.",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiControllerEvent.h" },
+    { "id": "sysex",   "lane": "doc", "col": 1, "row": 1, "label": "MidiSysexEvent",
+      "purpose": "Typed sysex event: timestamp plus byte payload.",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiSysexEvent.h" },
+    { "id": "expr",    "lane": "doc", "col": 3, "row": 1, "label": "MidiExpression",
+      "purpose": "MPE-style per-note expression: pressure, slide, glide. Attached to notes for polyphonic expression.",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiExpression.h" },
+    { "id": "pm",      "lane": "doc", "col": 5, "row": 1, "label": "MidiProgramManager",
+      "purpose": "Program-change metadata. Soundfont-style program naming so the UI can show 'Grand Piano' instead of 'PC #0'.",
+      "file": "modules/tracktion_engine/midi/tracktion_MidiProgramManager.h" },
+
+    { "id": "clip",    "lane": "clip", "col": 3, "label": "MidiClip",
+      "purpose": "A Clip on a TrackItemList that owns a MidiList. Holds quantise, transpose, loop, live/channel settings. Becomes a MidiNode at render time.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_MidiClip.h" },
+
+    { "id": "mn",      "lane": "graph", "col": 1, "label": "MidiNode",
+      "purpose": "class MidiNode final : public tracktion::graph::Node. Streams events from a MidiList into the graph each block. Handles looping, offsets, live mode.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiNode.h" },
+    { "id": "helpers", "lane": "graph", "col": 3, "label": "MidiNodeHelpers",
+      "purpose": "Shared helpers used by MidiNode, MidiInputDeviceNode, CombiningNode (MIDI path). Time-range conversion, block iteration, MPE trim at clip boundaries.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiNodeHelpers.h" },
+    { "id": "anl",     "lane": "graph", "col": 5, "label": "ActiveNoteList",
+      "purpose": "Tracks which notes are currently held. Lets the node issue matching note-offs when looping, stopping, or trimming — avoids stuck notes.",
+      "file": "modules/tracktion_engine/midi/tracktion_ActiveNoteList.h" },
+
+    { "id": "pb",      "lane": "fx", "col": 1, "label": "MidiPatchBay",
+      "purpose": "Plugin that reroutes MIDI channels inside the track chain.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_MidiPatchBay.h" },
+    { "id": "mm",      "lane": "fx", "col": 4, "label": "MidiModifier",
+      "purpose": "Plugin that transforms MIDI inline: transpose, velocity-scale, filter.",
+      "file": "modules/tracktion_engine/plugins/effects/tracktion_MidiModifier.h" },
+
+    { "id": "mi",      "lane": "io", "col": 0, "label": "MidiInputDevice",
+      "purpose": "Physical/virtual MIDI input. Feeds the graph via MidiInputDeviceNode.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.h" },
+    { "id": "midn",    "lane": "io", "col": 1, "label": "MidiInputDeviceNode",
+      "purpose": "Graph-side node for incoming live MIDI. Uses MidiNodeHelpers for time conversion.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiInputDeviceNode.h" },
+    { "id": "out",     "lane": "io", "col": 3, "label": "MidiOutputDeviceInstanceInjectingNode",
+      "purpose": "Graph node that injects MIDI into a specific output-device instance at the right sample offset.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiOutputDeviceInstanceInjectingNode.h" },
+    { "id": "disp",    "lane": "io", "col": 4, "label": "MidiNoteDispatcher",
+      "purpose": "OFF-AUDIO-THREAD dispatcher. juce::HighResolutionTimer. Audio thread queues, timer thread writes to the MidiOutputDevice. (See diagram 5, flag 3.)",
+      "file": "modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h" },
+    { "id": "mo",      "lane": "io", "col": 5, "label": "MidiOutputDevice",
+      "purpose": "Physical/virtual MIDI output.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiOutputDevice.h" },
+
+    { "id": "chord",   "lane": "music", "col": 1, "label": "Chord",
+      "purpose": "Musical chord representation. Used by the pattern generator and editor chord-name logic.",
+      "file": "modules/tracktion_engine/midi/tracktion_Musicality.h" },
+    { "id": "scale",   "lane": "music", "col": 3, "label": "Scale",
+      "purpose": "Scale / mode representation. Used for piano-roll scale highlighting and key analysis.",
+      "file": "modules/tracktion_engine/midi/tracktion_Musicality.h" },
+    { "id": "pat",     "lane": "music", "col": 5, "label": "PatternGenerator",
+      "purpose": "Generates MIDI notes from a chord/scale/pattern. The algorithmic-MIDI entry point.",
+      "file": "modules/tracktion_engine/midi/tracktion_Musicality.h" }
+  ],
+  "edges": [
+    { "id": "e.list.note",  "from": "list",  "to": "note",  "kind": "solid" },
+    { "id": "e.list.cc",    "from": "list",  "to": "cc",    "kind": "solid" },
+    { "id": "e.list.sysex", "from": "list",  "to": "sysex", "kind": "solid" },
+    { "id": "e.note.expr",  "from": "note",  "to": "expr",  "kind": "solid" },
+
+    { "id": "e.clip.list",  "from": "clip",  "to": "list",  "kind": "solid" },
+    { "id": "e.clip.mn",    "from": "clip",  "to": "mn",    "kind": "dashed" },
+
+    { "id": "e.mn.list",    "from": "mn",    "to": "list",  "kind": "dotted" },
+    { "id": "e.mn.helpers", "from": "mn",    "to": "helpers","kind": "dashed" },
+    { "id": "e.mn.anl",     "from": "mn",    "to": "anl",   "kind": "dashed" },
+
+    { "id": "e.midn.helpers","from": "midn", "to": "helpers","kind": "dashed" },
+    { "id": "e.mi.midn",    "from": "mi",    "to": "midn",  "kind": "dotted" },
+
+    { "id": "e.out.disp",   "from": "out",   "to": "disp",  "kind": "dashed" },
+    { "id": "e.disp.mo",    "from": "disp",  "to": "mo",    "kind": "dashed" },
+
+    { "id": "e.pb.mn",      "from": "pb",    "to": "mn",    "kind": "dotted" },
+    { "id": "e.mm.mn",      "from": "mm",    "to": "mn",    "kind": "dotted" },
+
+    { "id": "e.pat.list",   "from": "pat",   "to": "list",  "kind": "dashed" },
+    { "id": "e.chord.scale","from": "chord", "to": "scale", "kind": "dashed" },
+    { "id": "e.list.chord", "from": "list",  "to": "chord", "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["disp"],
+      "title": "Dispatcher runs off the audio thread",
+      "description": "MidiNoteDispatcher is a juce::HighResolutionTimer. The audio thread queues; the timer thread sends. Re-emphasised here because it is the single most important structural decision in the MIDI subsystem — anywhere else we'd expect device writes on the audio thread, we'd be wrong." },
+    { "num": 2, "nodes": ["note", "cc", "expr"],
+      "title": "Typed events, not juce::MidiMessage",
+      "description": "The document layer uses structured event classes (MidiNote carries pitch/beat/length/MPE expression as fields). juce::MidiMessage is only used at the edges — by the hosting layer and the hardware I/O. The typed design is what makes the piano-roll editor, automation, and MPE workable; the translation cost lives in MidiNode." },
+    { "num": 3, "nodes": ["anl"],
+      "title": "ActiveNoteList is why notes don't get stuck",
+      "description": "Across loops, stops, and mid-clip trims, something has to issue the matching note-offs for every note-on that was sent. ActiveNoteList is that bookkeeping. Without it the first looped MIDI clip in a session would sustain into the next loop." },
+    { "num": 4, "nodes": ["chord", "scale", "pat"],
+      "title": "Musicality is a layer, not a feature",
+      "description": "Chord, Scale, PatternGenerator sit above the raw event layer. They let the rest of the engine — piano-roll scale snap, chord-track playback, generative patterns — speak about music in musical terms, not byte-level MIDI. The file is called tracktion_Musicality.h, which is the right name for it." }
+  ],
+  "flows": [
+    { "id": "playback",
+      "label": "Playback path (document → graph → device)",
+      "description": "A MidiClip owns a MidiList. At render time the clip becomes a MidiNode that walks the list, tracks active notes, and emits events; outbound events flow through MidiOutputDeviceInstanceInjectingNode → MidiNoteDispatcher → MidiOutputDevice.",
+      "edges": [
+        "e.clip.list", "e.clip.mn", "e.mn.list", "e.mn.helpers", "e.mn.anl",
+        "e.out.disp", "e.disp.mo"
+      ] },
+    { "id": "record",
+      "label": "Record path (device → graph → document)",
+      "description": "MidiInputDevice → MidiInputDeviceNode (using shared helpers) drops events into the graph. From there recording (diagram 10) captures them into a MidiList.",
+      "edges": ["e.mi.midn", "e.midn.helpers"] },
+    { "id": "musicality",
+      "label": "Musicality layer",
+      "description": "Chord/Scale/PatternGenerator sit above MidiList: a PatternGenerator can populate a list, and a list carries key/scale context that chord analysis reads.",
+      "edges": ["e.pat.list", "e.list.chord", "e.chord.scale"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

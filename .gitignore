@@ -1,0 +1,13 @@
+# local / OS junk
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# agent state
+.claude/
+
+# upstream source mirror — read-only reference, not part of this repo.
+# clone separately from https://github.com/Tracktion/tracktion_engine
+tracktion_engine/

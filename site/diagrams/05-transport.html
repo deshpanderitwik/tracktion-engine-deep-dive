@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Transport &amp; playback — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="04-rendering-graph.html">prev</a>
+    <a href="06-plugins.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">05 · press play</div>
+    <h1>Transport &amp; playback</h1>
+    <p class="lede">
+      The chain that runs when the user hits the spacebar.
+      <code>TransportControl</code> is the public facade,
+      <code>EditPlaybackContext</code> is the per-Edit runtime, and
+      <code>PlayHead</code> — living one module over, in
+      <code>tracktion_graph</code> — is the actual clock. Devices,
+      MIDI dispatch, and external sync hang off the sides.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: a facade, a runtime, and a clock</h2>
+    <p>
+      Every DAW has a transport: play, stop, record, seek, loop. In
+      Tracktion Engine those verbs live on a single class —
+      <code>TransportControl</code> — that sits on the
+      <code>Edit</code> and offers a minimal public surface
+      (<code>play()</code>, <code>record()</code>, <code>stop()</code>,
+      <code>setPosition()</code>, <code>setLoopRange()</code>). The
+      surface is narrow on purpose. Behind it a larger runtime object,
+      <code>EditPlaybackContext</code>, holds the per-Edit state a
+      playing session actually needs: the tree of device instances, the
+      built graph root, a <code>SyncPoint</code> that relates timeline
+      time to reference samples. <code>TransportControl</code> delegates
+      to it for anything that isn't just a flag flip.
+    </p>
+    <p>
+      The actual clock is
+      <code>tracktion::graph::PlayHead</code>. It lives in
+      <code>tracktion_graph</code>, not in <code>tracktion_engine</code>.
+      That is deliberate — the graph module already carries the concept
+      of transport-relative time, and pulling it up into the engine
+      would force the generic DAG processor to depend on DAW types.
+      <code>TransportControl</code> never touches <code>PlayHead</code>
+      directly; it asks <code>EditPlaybackContext</code>, which then
+      drives the <code>PlayHead</code> that every
+      <code>Node::process()</code> call reads from.
+    </p>
+
+    <h2>Implementation: who calls whom on press-play</h2>
+    <p>
+      <code>TransportControl::play()</code> calls
+      <code>ensureContextAllocated()</code>, which lazily builds an
+      <code>EditPlaybackContext</code> if one does not exist.
+      <code>EditPlaybackContext</code> in turn asks
+      <code>DeviceManager</code> — owned by the <code>Engine</code> —
+      for the current audio and MIDI device handles, spins up
+      <code>WaveInputDeviceInstance</code> and
+      <code>MidiInputDeviceInstance</code> objects for each, calls
+      <code>createPlayAudioNodes()</code> to invoke
+      <code>createNodeForEdit</code> from diagram 4, and hands the
+      resulting <code>Node</code> tree to a
+      <code>LockFreeMultiThreadedNodePlayer</code>. Finally it calls
+      <code>PlayHead::play(range, looped)</code> and the audio callback
+      starts pulling blocks.
+    </p>
+    <p>
+      MIDI output is its own thread. <code>MidiNoteDispatcher</code> is
+      declared <code>class MidiNoteDispatcher : private
+      juce::HighResolutionTimer</code> — the audio thread writes
+      timestamped events into a queue and a separate high-res timer
+      callback (<code>hiResTimerCallback()</code>) actually drives the
+      hardware. That split is not incidental; sending MIDI out of the
+      audio callback jitters under load, and a dedicated timer lets the
+      audio block finish without being gated on device writes.
+    </p>
+    <p>
+      <code>AbletonLink</code> is the interesting external-sync path.
+      It is constructed with a <code>TransportControl&amp;</code>, and
+      its Link callbacks call
+      <code>TransportControl::requestStartStopChange()</code> and
+      <code>requestTempoChange()</code> — flowing <em>into</em> the
+      transport from outside. <code>ExternalPlayheadSynchroniser</code>
+      is the mirror image: it adapts an Edit so a hosting AudioProcessor
+      can drive <em>its</em> transport (call
+      <code>synchronise()</code> in <code>processBlock</code>). The two
+      bracket the transport from both sides.
+    </p>
+
+    <h2>Tradeoff: one runtime object, many hands on it</h2>
+    <p>
+      <code>EditPlaybackContext</code> has a lot going on. It carries
+      device-instance lists, the built graph, a
+      <code>SyncPoint</code>, pending position changes posted from the
+      UI thread via <code>postPosition()</code>, a speed-compensation
+      factor, tempo adjustment from Link, per-device recording state,
+      and a <code>ScopedDeviceListReleaser</code> for safe
+      reconfiguration. That breadth is the cost of keeping
+      <code>TransportControl</code>'s public surface small: every
+      responsibility that isn't "toggle a bool" ends up here. The
+      alternative — a family of smaller runtime objects — would shift
+      the complexity onto callers who'd have to orchestrate them, so
+      the concentration is a reasonable choice. It does mean reading
+      <code>EditPlaybackContext.h</code> takes longer than reading the
+      transport header.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      How does pending-position-change handling compose with Link-driven
+      tempo adjustment when both fire on the same block? The code paths
+      exist (<code>postPosition</code> plus <code>setTempoAdjustment</code>)
+      but their ordering is not obvious from the headers alone.
+      Worth a proper read of <code>EditPlaybackContext.cpp</code> when
+      I get to diagram 9 (threading &amp; realtime safety).
+    </p>
+    <p class="note">
+      Notable omission: this diagram does not break down MIDI timing
+      or the recording pipeline. MIDI timing gets its own diagram
+      (7); recording &amp; comping gets diagram 10.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "api",     "label": "PUBLIC API",                    "height": 110 },
+    { "id": "runtime", "label": "PER-EDIT RUNTIME",              "height": 120 },
+    { "id": "time",    "label": "CLOCK (tracktion_graph)",       "height": 100 },
+    { "id": "devices", "label": "DEVICES (owned by Engine)",     "height": 200 },
+    { "id": "sync",    "label": "EXTERNAL SYNC",                 "height": 110 }
+  ],
+  "nodes": [
+    { "id": "tc", "lane": "api", "col": 2, "label": "TransportControl",
+      "purpose": "The public facade. play/record/stop, setPosition, setLoopRange, ensureContextAllocated, freePlaybackContext. Constructed TransportControl(Edit&, const juce::ValueTree&). Every UI affordance for transport ends up calling a method here.",
+      "file": "modules/tracktion_engine/playback/tracktion_TransportControl.h" },
+
+    { "id": "epc", "lane": "runtime", "col": 1, "label": "EditPlaybackContext",
+      "purpose": "Per-Edit runtime. Constructed EditPlaybackContext(TransportControl&). Owns device-instance lists, the built Node root, a SyncPoint, pending position changes, speed compensation, tempo adjustment, recording state.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h" },
+    { "id": "hosted", "lane": "runtime", "col": 4, "label": "HostedAudioDeviceInterface",
+      "purpose": "Adapter used when the engine is embedded in a host (a plugin or test harness) instead of driving the audio device itself. Feeds blocks through the same pipeline.",
+      "file": "modules/tracktion_engine/playback/tracktion_HostedAudioDevice.h" },
+
+    { "id": "playhead", "lane": "time", "col": 3, "label": "PlayHead",
+      "purpose": "The time authority. Lives in tracktion_graph. setPosition(int64_t), play(Range<int64_t>, looped), stop; atomic speed / looping / userDragging / rollInToLoop flags; referenceSamplePositionToTimelinePosition. Queried by every processing Node.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h" },
+
+    { "id": "dm", "lane": "devices", "col": 0, "label": "DeviceManager",
+      "purpose": "Engine-owned. Extends juce::ChangeBroadcaster. Owns wave/MIDI device lists, sample rate, block size, output latency. Rescans on device changes.",
+      "file": "modules/tracktion_engine/playback/tracktion_DeviceManager.h" },
+    { "id": "wi", "lane": "devices", "col": 1, "label": "WaveInputDevice",
+      "purpose": "A physical or virtual audio-in channel. EditPlaybackContext spins up per-instance objects (WaveInputDeviceInstance) to read from it during a session.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h" },
+    { "id": "wo", "lane": "devices", "col": 2, "label": "WaveOutputDevice",
+      "purpose": "An audio-out channel. The destination of the played-back audio graph.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_WaveOutputDevice.h" },
+    { "id": "mi", "lane": "devices", "col": 3, "label": "MidiInputDevice",
+      "purpose": "A physical or virtual MIDI input. Its events are captured per-instance and fed into the graph as a MidiInputDeviceNode.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.h" },
+    { "id": "mo", "lane": "devices", "col": 4, "label": "MidiOutputDevice",
+      "purpose": "A physical or virtual MIDI output. Receives messages scheduled by the graph.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiOutputDevice.h" },
+    { "id": "disp", "lane": "devices", "col": 3, "row": 1, "label": "MidiNoteDispatcher",
+      "purpose": "Runs MIDI output on its OWN thread. Declared 'class MidiNoteDispatcher : private juce::HighResolutionTimer'. The audio thread queues timestamped messages; hiResTimerCallback() writes them to devices.",
+      "file": "modules/tracktion_engine/playback/tracktion_MidiNoteDispatcher.h" },
+
+    { "id": "link", "lane": "sync", "col": 1, "label": "AbletonLink",
+      "purpose": "Constructed AbletonLink(TransportControl&). External tempo/transport sync. requestStartStopChange() and requestTempoChange() drive the transport from the outside.",
+      "file": "modules/tracktion_engine/playback/tracktion_AbletonLink.h" },
+    { "id": "eps", "lane": "sync", "col": 4, "label": "ExternalPlayheadSynchroniser",
+      "purpose": "Used when the engine is inside a plugin. Call synchronise(AudioPlayHead&) in processBlock to drive the Edit's transport from the host's playhead. Mirror of AbletonLink.",
+      "file": "modules/tracktion_engine/utilities/tracktion_ExternalPlayheadSynchroniser.h" }
+  ],
+  "edges": [
+    { "id": "e.tc.epc",    "from": "tc",   "to": "epc",      "kind": "solid"  },
+    { "id": "e.epc.ph",    "from": "epc",  "to": "playhead", "kind": "dashed" },
+    { "id": "e.epc.dm",    "from": "epc",  "to": "dm",       "kind": "dashed" },
+    { "id": "e.epc.hosted","from": "epc",  "to": "hosted",   "kind": "dashed" },
+
+    { "id": "e.dm.wi",   "from": "dm", "to": "wi", "kind": "solid" },
+    { "id": "e.dm.wo",   "from": "dm", "to": "wo", "kind": "solid" },
+    { "id": "e.dm.mi",   "from": "dm", "to": "mi", "kind": "solid" },
+    { "id": "e.dm.mo",   "from": "dm", "to": "mo", "kind": "solid" },
+
+    { "id": "e.epc.wi",  "from": "epc", "to": "wi", "kind": "dashed" },
+    { "id": "e.epc.mi",  "from": "epc", "to": "mi", "kind": "dashed" },
+
+    { "id": "e.disp.mo", "from": "disp", "to": "mo",  "kind": "dashed" },
+    { "id": "e.epc.disp","from": "epc",  "to": "disp","kind": "dashed" },
+
+    { "id": "e.link.tc", "from": "link", "to": "tc", "kind": "dashed" },
+    { "id": "e.eps.tc",  "from": "eps",  "to": "tc", "kind": "dashed" },
+
+    { "id": "e.ph.wo",   "from": "playhead", "to": "wo",  "kind": "dotted" },
+    { "id": "e.wi.epc",  "from": "wi", "to": "epc", "kind": "dotted" },
+    { "id": "e.mi.epc",  "from": "mi", "to": "epc", "kind": "dotted" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["playhead"],
+      "title": "The clock is a stranger",
+      "description": "PlayHead lives in tracktion_graph, not tracktion_engine. TransportControl never touches it directly — it goes through EditPlaybackContext, which holds the reference. That split keeps tracktion_graph reusable: a non-DAW project can drive its own PlayHead without ever constructing a TransportControl." },
+    { "num": 2, "nodes": ["tc", "epc"],
+      "title": "Narrow facade, wide runtime",
+      "description": "TransportControl's public surface is minimal on purpose — play, record, stop, setPosition, setLoopRange, a few flag accessors. Everything else (device instances, graph building, pending position changes via postPosition, speed compensation, tempo adjustment, SyncPoint) lives on EditPlaybackContext. The transport is small so callers can reason about it; the runtime is large because something has to hold the rest." },
+    { "num": 3, "nodes": ["disp"],
+      "title": "MIDI output is NOT on the audio thread",
+      "description": "MidiNoteDispatcher is declared 'class MidiNoteDispatcher : private juce::HighResolutionTimer'. The audio thread queues timestamped messages; a separate high-resolution timer callback actually writes them to hardware. Sending MIDI out of the audio callback would jitter under load and risk blocking the block deadline — hence the thread split." },
+    { "num": 4, "nodes": ["link", "eps"],
+      "title": "Sync can flow either direction",
+      "description": "AbletonLink and ExternalPlayheadSynchroniser both take a reference (TransportControl& / Edit&) and call INTO the transport from the outside. The normal flow is UI → TransportControl → PlayHead; these two reverse it, letting an external clock (Link peer, host DAW) drive the engine's playhead. The transport has to be happy being driven either way." }
+  ],
+  "flows": [
+    { "id": "press-play",
+      "label": "Press-play path",
+      "description": "TransportControl.play() → ensureContextAllocated → EditPlaybackContext asks DeviceManager for devices, builds device instances, calls createPlayAudioNodes, then drives PlayHead. Audio callback pulls blocks from the WaveOutputDevice.",
+      "edges": [
+        "e.tc.epc", "e.epc.dm", "e.epc.wi", "e.epc.mi",
+        "e.epc.ph", "e.ph.wo"
+      ] },
+    { "id": "external-sync",
+      "label": "External sync (Link / host)",
+      "description": "An Ableton Link peer or a hosting AudioProcessor drives the transport from outside via requestStartStopChange / synchronise. TransportControl absorbs the change and forwards it through EditPlaybackContext to the PlayHead.",
+      "edges": ["e.link.tc", "e.eps.tc", "e.tc.epc", "e.epc.ph"] },
+    { "id": "midi-out",
+      "label": "MIDI-out path (off the audio thread)",
+      "description": "EditPlaybackContext hands outbound MIDI to the MidiNoteDispatcher, which runs a juce::HighResolutionTimer. The timer thread — not the audio thread — actually writes to the MidiOutputDevice.",
+      "edges": ["e.epc.disp", "e.disp.mo"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

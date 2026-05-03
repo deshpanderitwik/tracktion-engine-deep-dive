@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rendering &amp; export — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="11-automation.html">prev</a>
+    <a href="../glossary.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">12 · rendering &amp; export</div>
+    <h1>Rendering &amp; export</h1>
+    <p class="lede">
+      Offline rendering is the same graph from diagram 4, driven
+      faster than realtime by a <code>Renderer</code> into a file.
+      Freeze, warp-time, reverse clips, edit-within-edit nesting, and
+      bounce-to-track all go through the same
+      <code>RenderManager</code> job queue. One pipeline, many
+      consumers.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: the offline cousin of the live graph</h2>
+    <p>
+      Offline rendering in Tracktion Engine is not a separate system.
+      It uses the same <code>Node</code> graph from diagram 4, the
+      same <code>createNodeForEdit</code> builder, the same
+      <code>Plugin::applyToBuffer</code> calls. The only change is
+      that a <code>NodeRenderContext</code> drives the graph
+      block-by-block at whatever speed the CPU can sustain, writing
+      samples to a file instead of a device. The second overload of
+      <code>createNodeForEdit</code> — the one that takes
+      <code>Edit&amp;</code> instead of
+      <code>EditPlaybackContext&amp;</code> — exists specifically for
+      this.
+    </p>
+    <p>
+      <code>Renderer</code> is the public entry point. It takes a
+      <code>RenderOptions</code> describing format, bit depth, time
+      range, stems, dithering. <code>EditRenderer</code> specialises
+      it for full-Edit renders. An <code>ExportJob</code> wraps any
+      render as a <code>juce::ThreadPoolJob</code> with progress
+      reporting so the UI can show a bar.
+      <code>RenderManager</code> (a <code>DeletedAtShutdown</code>
+      singleton) owns the thread pool and coordinates jobs — no two
+      renders of the same output file can run at once.
+    </p>
+
+    <h2>Implementation: four families of render job</h2>
+    <p>
+      <strong>Full-Edit renders</strong> — the user clicks "Export" —
+      go through <code>EditRenderer</code> +
+      <code>RenderOptions</code>. Options include selected tracks (for
+      stems), time range, normalise, sample rate, format
+      (WAV/FLAC/MP3/etc, delegating to diagram 8's format stack),
+      dithering.
+    </p>
+    <p>
+      <strong>Freeze</strong> (diagram 10) uses
+      <code>EditClipRenderJob</code> indirectly: the freeze file for
+      a track is rendered via the same machinery, but with only that
+      track's chain selected. On completion the graph builder picks
+      up the file next time playback starts.
+    </p>
+    <p>
+      <strong>Clip-level baked effects</strong> — warp-time and
+      reverse — are rendered into new audio files that replace the
+      clip's source. <code>WarpTimeRenderJob</code> bakes time-stretch
+      edits and <code>ReverseRenderJob</code> produces reversed
+      audio. Both exist because doing these live every block would be
+      expensive and deterministic-enough-to-bake.
+    </p>
+    <p>
+      <strong>Nested edits</strong> — a clip that contains another
+      Edit — use <code>EditClipRenderJob</code> to render the
+      sub-Edit to a file that the parent then plays. This is how
+      hierarchical composition works without making every block a
+      recursive render. <code>EditRenderJob</code> is the generic
+      job type both sub-edit rendering and freeze sit on top of.
+    </p>
+    <p>
+      Glue: <code>Exportable</code> is the interface any renderable
+      object implements. It answers "what are your source files" and
+      "what destinations" so the exporter can gather dependencies,
+      check for missing files, and package multiple stems at once.
+      <code>DAWprojectExport</code> is a separate path — it's the
+      open project-interchange format (Bitwig's .dawproject), which
+      doesn't render audio but exports the Edit's structure.
+    </p>
+
+    <h2>Tradeoff: one graph for live and offline</h2>
+    <p>
+      Reusing the live graph for offline render is a correctness win
+      — what you hear is what you get, byte-for-byte — but it does
+      mean the graph has to be tolerant of being driven faster than
+      realtime. Most parts are: Node::process takes time in sample
+      frames, not wall-clock time, so it doesn't care how fast blocks
+      arrive. The places that <em>do</em> care — live MIDI inputs,
+      live audio inputs, plugins that depend on wall-clock timing —
+      are skipped by the offline overload of
+      <code>createNodeForEdit</code> (there's no
+      <code>MidiInputDeviceNode</code> in an offline graph).
+    </p>
+    <p>
+      The job-queue design pays dividends: a DAW with 50 tracks
+      freezing in parallel, or an export of 20 stems, or a nested
+      Edit whose children also need rendering, all go through
+      <code>RenderManager</code>'s queue with proper dependency
+      handling. The cost is that the render path has several entry
+      points (<code>Renderer</code>, <code>EditRenderer</code>,
+      <code>EditClipRenderJob</code>, <code>WarpTimeRenderJob</code>,
+      <code>ReverseRenderJob</code>) that all look alike but have
+      subtle differences in what part of the Edit they include.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      Does the renderer re-use the production
+      <code>LockFreeMultiThreadedNodePlayer</code>, or fall back to
+      the simpler <code>NodePlayer</code> for determinism? Offline
+      rendering usually wants reproducible output, which argues for
+      the single-threaded reference player. Worth confirming against
+      <code>Renderer.cpp</code> before the glossary.
+    </p>
+    <p class="note">
+      Notable omission: the MP3 / AAC encoder plumbing is in
+      diagram 8 (format stack), not here. The renderer uses the
+      format layer as-is — it doesn't know anything about MP3.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "ui",      "label": "ENTRY POINTS",                  "height": 110 },
+    { "id": "public",  "label": "PUBLIC API",                    "height": 110 },
+    { "id": "jobs",    "label": "JOB TYPES",                     "height": 200 },
+    { "id": "core",    "label": "CORE PIPELINE",                 "height": 120 },
+    { "id": "graph",   "label": "GRAPH REUSE (diagram 4)",       "height": 110 },
+    { "id": "consumers","label": "RENDER CONSUMERS",             "height": 200 }
+  ],
+  "nodes": [
+    { "id": "mgr",    "lane": "ui", "col": 2, "label": "RenderManager",
+      "purpose": "juce::DeletedAtShutdown singleton. Owns the thread pool, queues render jobs, ensures no two renders target the same output file at once.",
+      "file": "modules/tracktion_engine/model/export/tracktion_RenderManager.h" },
+
+    { "id": "r",      "lane": "public", "col": 1, "label": "Renderer",
+      "purpose": "Public entry point. Takes a RenderOptions and produces a file. Synchronous and async variants.",
+      "file": "modules/tracktion_engine/model/export/tracktion_Renderer.h" },
+    { "id": "er",     "lane": "public", "col": 3, "label": "EditRenderer",
+      "purpose": "Full-Edit renderer. Handles stems, time range, formats, dithering, normalise.",
+      "file": "modules/tracktion_engine/model/export/tracktion_Renderer.h" },
+    { "id": "opts",   "lane": "public", "col": 5, "label": "RenderOptions",
+      "purpose": "Value-tree-backed options: format, bit depth, sample rate, time range, tracks, normalise, dither.",
+      "file": "modules/tracktion_engine/model/export/tracktion_RenderOptions.h" },
+
+    { "id": "exp",    "lane": "jobs", "col": 0, "label": "ExportJob",
+      "purpose": "ThreadPoolJobWithProgress wrapper. Lets the UI show a progress bar and cancel. The generic shell any render uses when driven from the UI.",
+      "file": "modules/tracktion_engine/model/export/tracktion_ExportJob.h" },
+    { "id": "erj",    "lane": "jobs", "col": 1, "label": "EditRenderJob",
+      "purpose": "RenderManager::Job for rendering a sub-Edit to a file. Backbone of both nested-Edit playback and freeze.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h" },
+    { "id": "ecrj",   "lane": "jobs", "col": 3, "label": "EditClipRenderJob",
+      "purpose": "Specialises EditRenderJob for EditClip (nested-edit clip) rendering.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h" },
+    { "id": "warp",   "lane": "jobs", "col": 5, "label": "WarpTimeRenderJob",
+      "purpose": "Bakes warp-time edits (draggable time-stretch markers) into a new audio file that replaces the clip's source.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_WarpTimeRenderJob.h" },
+    { "id": "rev",    "lane": "jobs", "col": 0, "row": 1, "label": "ReverseRenderJob",
+      "purpose": "Writes a reversed-audio file for a clip. Implemented as a render because reversing while preserving fades/crossfades is non-trivial.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_ReverseRenderJob.h" },
+    { "id": "expable","lane": "jobs", "col": 3, "row": 1, "label": "Exportable",
+      "purpose": "Interface any renderable object implements. Answers 'what source files do you need' and 'what outputs will you produce' so the export path can gather deps and package stems.",
+      "file": "modules/tracktion_engine/model/export/tracktion_Exportable.h" },
+    { "id": "daw",    "lane": "jobs", "col": 5, "row": 1, "label": "DAWprojectExport",
+      "purpose": "Exports Edit structure to the open .dawproject format. No audio render — structural interchange only.",
+      "file": "modules/tracktion_engine/project/dawproject/tracktion_DAWprojectExport.h" },
+
+    { "id": "nrc",    "lane": "core", "col": 2, "label": "NodeRenderContext",
+      "purpose": "Drives a built graph block-by-block at faster-than-realtime speed. Knows sample rate, block size, time range, output file. Replaces the live audio callback.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_NodeRenderContext.h" },
+    { "id": "writer", "lane": "core", "col": 4, "label": "AudioFileWriter",
+      "purpose": "Wraps the selected juce::AudioFormatWriter (WAV, FLAC, MP3 via LAME, etc). Receives blocks from the NodeRenderContext.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_AudioFileWriter.h" },
+
+    { "id": "build",  "lane": "graph", "col": 2, "label": "createNodeForEdit(Edit&)",
+      "purpose": "The OFFLINE overload of the builder from diagram 4. Omits device-instance nodes (no live inputs) and freeze-file shortcuts that don't apply offline.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h" },
+    { "id": "np",     "lane": "graph", "col": 4, "label": "NodePlayer",
+      "purpose": "The simple single-threaded player — likely what the renderer uses for deterministic output. (See open questions.)",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_NodePlayer.h" },
+
+    { "id": "export", "lane": "consumers", "col": 0, "label": "User export",
+      "purpose": "File → Export menu. Produces final delivery files via EditRenderer + RenderOptions.",
+      "file": "(UI — consumer)" },
+    { "id": "freeze", "lane": "consumers", "col": 2, "label": "Track freeze",
+      "purpose": "Diagram 10's freeze uses this pipeline to bake a track to disk. FreezePointPlugin decides the cut; EditRenderJob produces the file.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h" },
+    { "id": "nested", "lane": "consumers", "col": 4, "label": "Nested Edit",
+      "purpose": "An EditClip hosts another Edit. EditClipRenderJob produces a rendered file the parent graph plays — no recursive realtime.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_EditClipRenderJob.h" },
+    { "id": "bake",   "lane": "consumers", "col": 0, "row": 1, "label": "Clip bake (warp/reverse)",
+      "purpose": "Warp-time and reverse destructively render the clip's audio to a new file that replaces the source.",
+      "file": "modules/tracktion_engine/model/clips/" },
+    { "id": "stems",  "lane": "consumers", "col": 3, "row": 1, "label": "Stems export",
+      "purpose": "Same EditRenderer with per-track filtering. Produces one file per track or per stem group.",
+      "file": "modules/tracktion_engine/model/export/tracktion_RenderOptions.h" }
+  ],
+  "edges": [
+    { "id": "e.mgr.erj",   "from": "mgr",  "to": "erj",    "kind": "solid"  },
+    { "id": "e.mgr.exp",   "from": "mgr",  "to": "exp",    "kind": "solid"  },
+
+    { "id": "e.r.opts",    "from": "r",    "to": "opts",   "kind": "dashed" },
+    { "id": "e.er.r",      "from": "er",   "to": "r",      "kind": "solid"  },
+    { "id": "e.er.opts",   "from": "er",   "to": "opts",   "kind": "dashed" },
+    { "id": "e.er.mgr",    "from": "er",   "to": "mgr",    "kind": "dashed" },
+
+    { "id": "e.ecrj.erj",  "from": "ecrj", "to": "erj",    "kind": "solid"  },
+    { "id": "e.warp.erj",  "from": "warp", "to": "erj",    "kind": "dashed" },
+    { "id": "e.rev.erj",   "from": "rev",  "to": "erj",    "kind": "dashed" },
+    { "id": "e.erj.nrc",   "from": "erj",  "to": "nrc",    "kind": "dashed" },
+    { "id": "e.r.nrc",     "from": "r",    "to": "nrc",    "kind": "dashed" },
+
+    { "id": "e.nrc.build", "from": "nrc",  "to": "build",  "kind": "dashed" },
+    { "id": "e.nrc.np",    "from": "nrc",  "to": "np",     "kind": "dashed" },
+    { "id": "e.nrc.writer","from": "nrc",  "to": "writer", "kind": "dashed" },
+
+    { "id": "e.export.er",   "from": "export","to": "er",  "kind": "dashed" },
+    { "id": "e.stems.er",    "from": "stems", "to": "er",  "kind": "dashed" },
+    { "id": "e.freeze.erj",  "from": "freeze","to": "erj", "kind": "dashed" },
+    { "id": "e.nested.ecrj", "from": "nested","to": "ecrj","kind": "dashed" },
+    { "id": "e.bake.warp",   "from": "bake",  "to": "warp","kind": "dashed" },
+    { "id": "e.bake.rev",    "from": "bake",  "to": "rev", "kind": "dashed" },
+
+    { "id": "e.expable.er",  "from": "expable","to": "er", "kind": "dotted" },
+    { "id": "e.daw.expable", "from": "daw",  "to": "expable","kind": "dashed" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["build", "nrc"],
+      "title": "The live graph is the offline graph",
+      "description": "Offline rendering reuses createNodeForEdit — the same builder from diagram 4 — with the Edit& overload that skips live I/O nodes. NodeRenderContext drives the resulting graph faster-than-realtime, in place of the audio callback. One pipeline, two speeds. Correctness by construction: what you hear is what you export." },
+    { "num": 2, "nodes": ["erj"],
+      "title": "Freeze, nested edits, and warp are all one job type",
+      "description": "EditRenderJob is the generic RenderManager::Job that freezes tracks, renders nested Edits, and renders clip-bake effects. Specialisations (EditClipRenderJob for nested edits, WarpTimeRenderJob, ReverseRenderJob) customise which slice of the Edit they render, but the queue, progress, and coordination story is shared." },
+    { "num": 3, "nodes": ["mgr"],
+      "title": "RenderManager is DeletedAtShutdown",
+      "description": "Singleton (juce::DeletedAtShutdown). Every render in a running engine — user export, freeze, warp, reverse, nested — passes through this one coordinator. That is how the engine guarantees no two jobs target the same output file and that stems render in a coordinated order." },
+    { "num": 4, "nodes": ["np"],
+      "title": "Deterministic player for offline",
+      "description": "Live playback uses LockFreeMultiThreadedNodePlayer for throughput (diagram 9). Offline rendering likely uses the simpler single-threaded NodePlayer for determinism — the same Node tree will produce identical output every time regardless of CPU load. Confirming against Renderer.cpp is a glossary-page follow-up." }
+  ],
+  "flows": [
+    { "id": "export-path",
+      "label": "User export path",
+      "description": "Menu → EditRenderer + RenderOptions → enqueued on RenderManager → EditRenderJob runs NodeRenderContext, which drives a graph built by createNodeForEdit and writes samples through AudioFileWriter.",
+      "edges": [
+        "e.export.er", "e.er.r", "e.r.opts", "e.er.mgr",
+        "e.mgr.erj", "e.erj.nrc", "e.nrc.build", "e.nrc.np", "e.nrc.writer"
+      ] },
+    { "id": "freeze-path",
+      "label": "Freeze (diagram 10 → here)",
+      "description": "Track-freeze enqueues an EditRenderJob through RenderManager; same NodeRenderContext + writer path as export.",
+      "edges": ["e.freeze.erj", "e.mgr.erj", "e.erj.nrc"] },
+    { "id": "nested",
+      "label": "Nested-Edit clip",
+      "description": "An EditClip enqueues an EditClipRenderJob (extends EditRenderJob). The resulting file is what the parent graph plays for that clip — hierarchical composition without recursive live rendering.",
+      "edges": ["e.nested.ecrj", "e.ecrj.erj"] },
+    { "id": "bake",
+      "label": "Clip bake (warp / reverse)",
+      "description": "WarpTimeRenderJob and ReverseRenderJob produce replacement source files for clip-level destructive effects, both through the same queue.",
+      "edges": ["e.bake.warp", "e.bake.rev", "e.warp.erj", "e.rev.erj"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

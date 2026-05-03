@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>About — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/style.css?v=10" />
+<script defer src="assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="index.html">home</a>
+    <a href="glossary.html">glossary</a>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="page-header">
+    <div class="kicker">colophon · methodology · what this is and isn't</div>
+    <h1>About this site</h1>
+  </header>
+
+  <h2>What it is</h2>
+  <p>
+    A teaching artifact about how a production digital audio workstation
+    engine is actually put together. The subject is
+    <a href="https://github.com/Tracktion/tracktion_engine">Tracktion Engine</a>,
+    the engine behind the Waveform DAW, open-sourced and maintained by
+    Tracktion. The audience is a developer who wants to build the next
+    generation of DAWs and needs to understand what components one contains,
+    how they interconnect, and how they collaborate to let people produce
+    music.
+  </p>
+
+  <h2>What it isn't</h2>
+  <p>
+    It isn't a reference. It isn't auto-generated. It isn't exhaustive. If
+    you need the full API surface, read the
+    <a href="https://tracktion.github.io/tracktion_engine/modules.html">Doxygen</a>
+    or the headers themselves. This site picks a dozen specific cross-sections
+    through the codebase and explains them well, because twelve deep diagrams
+    teach more than a hundred shallow ones.
+  </p>
+
+  <h2>How it was built</h2>
+  <p>
+    The repository was cloned with <code>--recurse-submodules</code> and
+    every diagram was built by reading the actual source. Doxygen,
+    DeepWiki, and prior knowledge of other DAWs were supporting context
+    only — never a substitute for opening the header. When I couldn't
+    verify a relationship from the source, it didn't go on the diagram;
+    it became a flag.
+  </p>
+  <p>
+    The visual grammar is deliberately constrained. Three edge kinds,
+    two accent colors, one flag color. Swimlanes vary by diagram topic
+    but look and behave the same on every page. Node labels are file
+    paths or class names, never prose. Commentary is in the margin,
+    not inside the box.
+  </p>
+
+  <h2>Version</h2>
+  <p>
+    Everything on this site reflects the repository at commit
+    <a href="https://github.com/Tracktion/tracktion_engine/commit/2877b621f2fbee564d0696a616b86bf8ba8c8ab0"><code>2877b621</code></a>
+    (version 3.2.0, 2026-02-18). If the codebase has moved on since,
+    some file paths may have drifted; the diagrams should still read
+    true at the subsystem level.
+  </p>
+
+  <h2>Corrections</h2>
+  <p>
+    If a diagram or flag is wrong, say so — being corrected is the whole
+    point of writing this down. A diagram that paints an incomplete
+    picture honestly is more valuable than one that paints a complete
+    picture wrong.
+  </p>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ten lessons — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/style.css?v=10" />
+<script defer src="assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="index.html">home</a>
+    <a href="glossary.html">glossary</a>
+    <a href="about.html">about</a>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="page-header">
+    <div class="kicker">what reading the source actually taught me</div>
+    <h1>Ten lessons from Tracktion Engine</h1>
+    <p class="lede">
+      A synthesis after building the twelve diagrams. These are the moves
+      that reshaped my mental model of what a DAW <em>is</em> — ordered
+      roughly from "spine of the architecture" out to "how the realtime
+      contract is kept." If you only read the diagrams for one thing, read
+      them for these.
+    </p>
+  </header>
+
+  <ol class="lesson-list">
+    <li>
+      <h2>The Edit is a <code>juce::ValueTree</code>, not a custom object graph.</h2>
+      <p>
+        Tracks, clips, plugins, automation, tempos — almost everything in the
+        document is reflected through ValueTree nodes. Undo, dirty-tracking,
+        change notification, and serialization all come from one mechanism.
+        The classes you read in <code>tracktion_Track.h</code> are typed
+        <em>views</em> over a generic observable document. This is the move
+        I'd steal first.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/03-the-edit.html">diagram 03 — the Edit</a></p>
+    </li>
+
+    <li>
+      <h2>The live audio graph IS the offline render graph.</h2>
+      <p>
+        <code>createNodeForEdit(Edit&amp;)</code> returns the same DAG that
+        the realtime player and the offline renderer both consume. Freeze,
+        nested-edit baking, warp, stems, user export — each is an
+        <code>EditRenderJob</code> specialization driving the same node
+        tree. "Render doesn't match playback" is closed by construction,
+        not by tests.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/04-rendering-graph.html">diagram 04 — rendering graph</a> · <a href="diagrams/12-rendering.html">diagram 12 — rendering</a></p>
+    </li>
+
+    <li>
+      <h2>Routing is a plugin.</h2>
+      <p>
+        <code>VolumeAndPan</code>, <code>AuxSend</code>, <code>AuxReturn</code>,
+        <code>InsertSend</code>, <code>RackInstance</code>,
+        <code>FreezePoint</code> — all <code>Plugin</code> subclasses living
+        in the plugin chain. There is no separate mixer/router primitive.
+        The chain ordering you see in the UI <em>is</em> the signal flow.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/06-plugins.html">diagram 06 — plugin system</a></p>
+    </li>
+
+    <li>
+      <h2>Racks are shared sub-graphs.</h2>
+      <p>
+        A <code>RackType</code> defines a small graph;
+        <code>RackInstance</code>s place it in larger graphs and share the
+        DSP. That's how you get a modular-synth pattern inside a
+        linear-timeline DAW without paying for it N times.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/06-plugins.html">diagram 06 — plugin system</a></p>
+    </li>
+
+    <li>
+      <h2>Recording is always-on; transport just commits it.</h2>
+      <p>
+        Every armed input continuously fills a <code>retrospectiveBuffer</code>
+        (default 30 seconds). Hitting record doesn't open a writer — it
+        slices what's already been captured. <em>"What was that thing I just
+        played?"</em> is the default, not a feature.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/10-recording-comping.html">diagram 10 — recording &amp; comping</a></p>
+    </li>
+
+    <li>
+      <h2>The MIDI output dispatcher is deliberately off the audio thread.</h2>
+      <p>
+        <code>MidiNoteDispatcher</code> is a
+        <code>juce::HighResolutionTimer</code>, not a callback consumer.
+        If you bound MIDI-out timing to audio block boundaries, your latency
+        floor would be the block size. Audio and MIDI are on related but
+        separate clocks for a reason.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/05-transport.html">diagram 05 — transport</a> · <a href="diagrams/07-midi.html">diagram 07 — MIDI</a></p>
+    </li>
+
+    <li>
+      <h2>There's no homegrown realtime toolkit.</h2>
+      <p>
+        Tracktion composes seven vendored libraries —
+        <code>farbot</code>,
+        <code>moodycamel/concurrentqueue</code>,
+        <code>crill</code>,
+        <code>rigtorp/SPSCQueue</code>,
+        <code>rpmalloc</code>,
+        <code>choc</code>,
+        <code>libsamplerate</code> —
+        each solving one narrow lock-free or realtime problem. The lesson is
+        restraint: don't write your own SPSC queue, your own seqlock, your
+        own RT allocator. Pick the best one and stop.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/02-module-graph.html">diagram 02 — module graph</a> · <a href="diagrams/09-threading.html">diagram 09 — threading</a></p>
+    </li>
+
+    <li>
+      <h2>Plugin construction is a <code>std::function</code> factory.</h2>
+      <p>
+        <code>createPluginInstance</code> is a registered callable per type.
+        That single indirection is what lets internal plugins, VST/AU/CLAP
+        wrappers, ARA hosts, and Racks all live in one chain without the
+        host caring which kind it has.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/06-plugins.html">diagram 06 — plugin system</a></p>
+    </li>
+
+    <li>
+      <h2>Automation is recursive because the type system is.</h2>
+      <p>
+        A <code>Modifier</code> (LFO / envelope / random / breakpoint /
+        MIDI-tracker) is itself an <code>AutomatableEditItem</code>. A
+        <code>MacroParameter</code> is itself an
+        <code>AutomatableParameter</code>. So you can automate the macro
+        that drives a parameter that's also being driven by an LFO, and
+        nothing about the model has to special-case it.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/11-automation.html">diagram 11 — automation</a></p>
+    </li>
+
+    <li>
+      <h2>The audio thread is a contract, not a function.</h2>
+      <p>
+        It cannot wait, allocate, or lock. Everything else —
+        <code>MultipleWriterSeqLock</code>, lock-free FIFOs, async
+        value-tree updates, <code>ScopedSteadyLoad</code>, the worker pool's
+        six selectable strategies — exists to let the rest of the system
+        mutate state without making the audio thread block. Once you read
+        it that way, the thread diagram stops looking complicated and
+        starts looking inevitable.
+      </p>
+      <p class="lesson-refs"><a href="diagrams/09-threading.html">diagram 09 — threading</a></p>
+    </li>
+  </ol>
+
+  <hr />
+
+  <p>
+    Two honourable mentions that didn't make the cut. <code>CompManager</code>
+    is <code>SingleThreadedReferenceCountedObject</code> — comping is
+    explicitly a UI-thread concern, and the audio graph only ever sees the
+    flattened result. And <code>TimeStretcher</code> is a compile-time
+    façade over Elastique / RubberBand / SoundTouch / ARA — build-time
+    choice, not runtime polymorphism, traded off against a small loss of
+    flexibility for cleaner code paths and simpler licensing.
+  </p>
+
+  <hr />
+
+  <p class="mono" style="color:var(--text-faint);font-size:0.85rem;">
+    Built against Tracktion Engine 3.2.0, commit
+    <a href="https://github.com/Tracktion/tracktion_engine/commit/2877b621f2fbee564d0696a616b86bf8ba8c8ab0"><code>2877b621</code></a>.
+    For the long-form versions, walk the
+    <a href="index.html">twelve diagrams</a>.
+  </p>
+</main>
+
+</body>
+</html>

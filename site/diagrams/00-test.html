@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scaffold test diagram — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="../glossary.html">glossary</a>
+    <a href="../about.html">about</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">00 · scaffold test (not a real diagram)</div>
+    <h1>Pipeline check: every feature, dummy data</h1>
+    <p class="lede">
+      This page exercises every feature of the shared diagram component
+      against fabricated content. If you can read the tooltip, click a node
+      and see teal/amber highlighting, click a flag in the sidebar and see
+      pinned nodes, and toggle the flow overlay to animate a path — the
+      pipeline works end to end. Delete this page before shipping.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>What you should see</h2>
+    <p>
+      Two swimlanes. Five nodes. One solid edge (ownership), one dashed
+      edge (runtime message), one dotted edge (data flow). Two flags pinned
+      to nodes. One flow overlay that you can toggle from the sidebar to
+      animate the dotted edge with a moving amber dash pattern.
+    </p>
+    <p class="note">
+      If any of those are missing, the scaffold is broken and downstream
+      diagrams will inherit the bug. Fix here first, then proceed to
+      diagram 1.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "source", "label": "SOURCES", "height": 160 },
+    { "id": "sink",   "label": "SINKS",   "height": 160 }
+  ],
+  "nodes": [
+    { "id": "alpha", "lane": "source", "col": 0, "label": "Alpha",
+      "purpose": "An imaginary source node. Hover works.",
+      "file": "modules/fake/alpha.h" },
+    { "id": "beta",  "lane": "source", "col": 1, "label": "Beta",
+      "purpose": "A second source. Click me to see highlighting.",
+      "file": "modules/fake/beta.h" },
+    { "id": "mid",   "lane": "source", "col": 2, "label": "Mid",
+      "purpose": "Middle node. Owned by Alpha, messaged by Beta.",
+      "file": "modules/fake/mid.h" },
+    { "id": "out1",  "lane": "sink",   "col": 2, "label": "OutA",
+      "purpose": "Audio data flows here.",
+      "file": "modules/fake/out1.h" },
+    { "id": "out2",  "lane": "sink",   "col": 3, "label": "OutB",
+      "purpose": "Second sink — not on the flow path.",
+      "file": "modules/fake/out2.h" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "alpha", "to": "mid",  "kind": "solid"  },
+    { "id": "e2", "from": "beta",  "to": "mid",  "kind": "dashed" },
+    { "id": "e3", "from": "mid",   "to": "out1", "kind": "dotted" },
+    { "id": "e4", "from": "mid",   "to": "out2", "kind": "solid"  }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["mid"],
+      "title": "Fan-in point",
+      "description": "Mid receives both ownership and messages. On real diagrams this kind of node usually deserves its own paragraph." },
+    { "num": 2, "nodes": ["out1", "out2"],
+      "title": "Two sinks, one reason unclear",
+      "description": "Why two outputs instead of one? On a real diagram, this is the kind of thing I would flag and then either explain or admit I don't know." }
+  ],
+  "flows": [
+    { "id": "data-path",
+      "label": "Data path",
+      "description": "Animate the dotted edge from Mid to OutA. Toggle off to clear.",
+      "edges": ["e3"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

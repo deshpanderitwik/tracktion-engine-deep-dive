@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recording, comping &amp; freeze — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="09-threading.html">prev</a>
+    <a href="11-automation.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">10 · recording, comping &amp; freeze</div>
+    <h1>Recording, comping &amp; freeze</h1>
+    <p class="lede">
+      Three related paths that all commit audio to disk:
+      <em>recording</em> captures an input, <em>comping</em> stitches
+      the best bits of multiple takes, and <em>freeze</em> bakes a
+      track's live graph into a wave file to save CPU. They share the
+      same plumbing — an <code>InputDeviceInstance</code>, a retrospective
+      buffer, and a background writer thread.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: capture, stitch, bake</h2>
+    <p>
+      Recording is the act of writing an incoming signal to disk and
+      then inserting a clip that references the file. In Tracktion
+      Engine the live side of that lives on
+      <code>InputDeviceInstance</code> and its per-device
+      <code>RecordingContext</code>, hanging off the
+      <code>EditPlaybackContext</code> from diagram 5. Wave input
+      goes through a dedicated
+      <code>WaveInputRecordingThread</code> (a
+      <code>juce::Thread</code>) that drains an audio FIFO and writes
+      the file; MIDI input uses a <code>MidiRecordingContext</code>
+      that accumulates events into a <code>MidiList</code> directly.
+    </p>
+    <p>
+      Comping is an editor-side concept: a track can have multiple
+      <em>takes</em> (each a sibling clip on the same source), and
+      the user picks sections from each to form the final comped
+      playback. <code>CompManager</code> and its subclasses
+      (<code>WaveCompManager</code>, <code>MidiCompManager</code>)
+      own that relationship. <code>TrackCompManager</code> collects
+      track-level comp metadata.
+    </p>
+    <p>
+      Freeze is the DAW feature where you commit a track's live
+      processing to a rendered audio file so the engine can play the
+      file instead of the full plugin chain. The engine's
+      <code>FreezePointPlugin</code> (an internal Plugin from diagram
+      6) marks the point in the chain where freezing cuts; the
+      actual render reuses diagram 12's rendering machinery. At
+      playback, if a freeze file exists the graph builder
+      (<code>createNodeForEdit</code>) skips the upstream plugins and
+      plays the wave instead.
+    </p>
+
+    <h2>Implementation: shared plumbing, different destinations</h2>
+    <p>
+      The entry point is on <code>TransportControl</code>:
+      <code>record()</code> plus <code>stopRecording()</code>. The
+      state lives on <code>EditPlaybackContext</code>
+      (<code>prepareForRecording</code>,
+      <code>numActivelyRecordingDevices</code>, and the
+      <code>applyRetrospectiveRecord()</code> that consumes the
+      retrospective buffer). Each
+      <code>InputDeviceInstance</code> owns a
+      <code>RecordingContext</code> that tracks start time, punch
+      in/out, and the file currently being written.
+    </p>
+    <p>
+      Retrospective record is a nice touch. Even when not recording,
+      each input device maintains a ring buffer of the last N
+      seconds of incoming audio / MIDI (default 30 s, via
+      <code>SettingID::retrospectiveRecord</code>). Hit "oh, I should
+      have been recording" and <code>applyRetrospectiveRecord()</code>
+      creates clips from the buffer contents. The retrospective
+      buffer lives on <code>InputDevice</code>; a
+      <code>retrospectiveRecordLock</code> flag lets the UI guarantee
+      the buffer can't be clobbered while the user is deciding.
+    </p>
+    <p>
+      Comp managers are single-threaded ref-counted
+      (<code>juce::SingleThreadedReferenceCountedObject</code>) and
+      editor-thread-only. They do not touch the audio thread — the
+      playback side sees comped material as regular clips in a
+      <code>CombiningNode</code>, the same path a normal multi-clip
+      track uses.
+    </p>
+    <p>
+      Freeze uses the render machinery from diagram 12 but stores the
+      result alongside the Edit (and tags it so the graph builder can
+      find it). <code>FreezePointPlugin</code> is where the chain is
+      cut; when frozen, the <code>createNodeForEdit</code> builder
+      emits a <code>WaveNode</code> pointing at the freeze file and
+      skips everything upstream of the freeze-point plugin.
+    </p>
+
+    <h2>Tradeoff: one retrospective buffer, many takes</h2>
+    <p>
+      Retrospective record is a single ring per input. If the user
+      wants to retrospectively capture a take they played 90 s ago
+      and the buffer is 30 s, it's gone. Making the buffer bigger
+      costs memory linear in every-input-times-seconds, and default
+      30 s per input already adds up on a session with ten mic
+      inputs. The setting is user-visible so advanced users can tune
+      it; the default is a size-balanced guess.
+    </p>
+    <p>
+      Freeze's tradeoff is conceptually similar to bus freezing in
+      other DAWs: you lose the ability to edit upstream plugins
+      without re-rendering. The engine's implementation is tidy
+      because freeze is <em>just a plugin</em> (FreezePointPlugin)
+      marking the cut — any plugin chain can be frozen, any sub-chain
+      can be left live. The builder chooses at graph-build time.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      How does comp playback handle fades at the boundaries between
+      sections from different takes? A naive implementation clicks;
+      a careful one applies short cross-fades. The CompManager owns
+      that metadata but the actual fade logic is graph-side, and
+      likely inside <code>FadeInOutNode</code> or a helper used by
+      <code>CombiningNode</code>. Worth a closer look for the
+      glossary.
+    </p>
+    <p class="note">
+      Notable omission: punch-in / punch-out UI details and the
+      many-takes "loop record" mode aren't drawn here. Both are
+      variants of the same recording path, with the loop-record mode
+      accumulating successive takes as sibling clips that
+      <code>WaveCompManager</code> can then consume.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "trigger", "label": "TRIGGER",                       "height": 100 },
+    { "id": "runtime", "label": "RUNTIME STATE",                 "height": 120 },
+    { "id": "capture", "label": "CAPTURE (per device)",          "height": 200 },
+    { "id": "writers", "label": "BACKGROUND WRITERS",            "height": 110 },
+    { "id": "model",   "label": "DOCUMENT RESULT",               "height": 120 },
+    { "id": "comp",    "label": "COMPING",                       "height": 200 },
+    { "id": "freeze",  "label": "FREEZE",                        "height": 110 }
+  ],
+  "nodes": [
+    { "id": "tc", "lane": "trigger", "col": 2, "label": "TransportControl",
+      "purpose": "record() / stopRecording() / stopIfRecording() / applyRetrospectiveRecord(). Entry points into the recording state machine.",
+      "file": "modules/tracktion_engine/playback/tracktion_TransportControl.h" },
+
+    { "id": "epc", "lane": "runtime", "col": 1, "label": "EditPlaybackContext",
+      "purpose": "prepareForRecording(startTime, punchIn), numActivelyRecordingDevices counter, applyRetrospectiveRecord(). Tracks recording state per session.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h" },
+    { "id": "edid","lane": "runtime", "col": 4, "label": "EditInputDevices",
+      "purpose": "The per-Edit mapping of input devices to tracks. Holds which tracks are armed for which inputs.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditInputDevices.h" },
+
+    { "id": "idi", "lane": "capture", "col": 0, "label": "InputDeviceInstance",
+      "purpose": "Per-Edit, per-input adapter. Base class of WaveInputDeviceInstance and MidiInputDeviceInstance. Holds the per-session RecordingContext.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_InputDevice.h" },
+    { "id": "rc",  "lane": "capture", "col": 2, "label": "RecordingContext",
+      "purpose": "Per-take state: start time, punch in/out, file being written. Base class; WaveRecordingContext and MidiRecordingContext specialise it.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_InputDevice.h" },
+    { "id": "retro","lane": "capture", "col": 4, "label": "retrospectiveBuffer",
+      "purpose": "A ring buffer on every InputDevice holding the last N seconds of input. Default 30 s via SettingID::retrospectiveRecord. retrospectiveRecordLock prevents clobbering while UI decides.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_InputDevice.h" },
+    { "id": "widn","lane": "capture", "col": 0, "row": 1, "label": "WaveInputDevice",
+      "purpose": "Captures audio input. applyRetrospectiveRecord converts ring-buffer contents into WaveAudioClips.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h" },
+    { "id": "midn","lane": "capture", "col": 2, "row": 1, "label": "MidiInputDevice",
+      "purpose": "Captures MIDI input. Accumulates into a MidiList via MidiRecordingContext.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.h" },
+    { "id": "stop","lane": "capture", "col": 4, "row": 1, "label": "RecordStopper",
+      "purpose": "Helper that coordinates MIDI record stop — ensures in-flight note-offs land before the clip boundary.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_MidiInputDevice.cpp" },
+
+    { "id": "wirt","lane": "writers", "col": 1, "label": "WaveInputRecordingThread",
+      "purpose": "juce::Thread that owns the audio-file writes. The audio callback pushes samples into a FIFO; this thread drains it into the WAV.",
+      "file": "modules/tracktion_engine/playback/devices/tracktion_WaveInputDevice.h" },
+    { "id": "thumb","lane": "writers", "col": 4, "label": "RecordingThumbnailManager",
+      "purpose": "Feeds live waveform thumbnails to the UI while recording, so the user sees the track filling in.",
+      "file": "modules/tracktion_engine/audio_files/tracktion_RecordingThumbnailManager.h" },
+
+    { "id": "wac","lane": "model", "col": 1, "label": "WaveAudioClip",
+      "purpose": "The document result of wave recording: a clip on the track referencing the newly written file.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_WaveAudioClip.h" },
+    { "id": "mc", "lane": "model", "col": 4, "label": "MidiClip",
+      "purpose": "The document result of MIDI recording: a clip containing the captured MidiList.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_MidiClip.h" },
+
+    { "id": "cm", "lane": "comp", "col": 1, "label": "CompManager",
+      "purpose": "Base of WaveCompManager / MidiCompManager. juce::SingleThreadedReferenceCountedObject — editor-thread only, never touches audio thread.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_CompManager.h" },
+    { "id": "wcm","lane": "comp", "col": 2, "label": "WaveCompManager",
+      "purpose": "Comp manager for wave takes. Picks sections from sibling WaveAudioClips to form comped playback.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_CompManager.h" },
+    { "id": "mcm","lane": "comp", "col": 4, "label": "MidiCompManager",
+      "purpose": "Comp manager for MIDI takes.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_CompManager.h" },
+    { "id": "tcm","lane": "comp", "col": 0, "row": 1, "label": "TrackCompManager",
+      "purpose": "Track-level comp metadata. Ties takes on a track together so the editor UI can present them as one comp.",
+      "file": "modules/tracktion_engine/model/tracks/tracktion_TrackCompManager.h" },
+    { "id": "fact","lane": "comp", "col": 2, "row": 1, "label": "CompFactory",
+      "purpose": "Creates comp managers for a given clip. Keeps CompManager construction localised.",
+      "file": "modules/tracktion_engine/model/clips/tracktion_CompManager.h" },
+
+    { "id": "frz","lane": "freeze", "col": 1, "label": "FreezePointPlugin",
+      "purpose": "An internal Plugin that marks where freeze cuts the plugin chain. When frozen, the graph builder skips upstream of this point and plays a wave file instead.",
+      "file": "modules/tracktion_engine/plugins/internal/tracktion_FreezePoint.h" },
+    { "id": "render","lane": "freeze", "col": 4, "label": "Renderer (diagram 12)",
+      "purpose": "Freeze uses the same render pipeline as offline export — createNodeForEdit(Edit&, ...) to build a tree, then pull samples into a file.",
+      "file": "modules/tracktion_engine/audio_files/render/" }
+  ],
+  "edges": [
+    { "id": "e.tc.epc",    "from": "tc",  "to": "epc",  "kind": "solid"  },
+    { "id": "e.epc.edid",  "from": "epc", "to": "edid", "kind": "dashed" },
+    { "id": "e.epc.idi",   "from": "epc", "to": "idi",  "kind": "dashed" },
+    { "id": "e.idi.rc",    "from": "idi", "to": "rc",   "kind": "solid"  },
+    { "id": "e.widn.idi",  "from": "widn","to": "idi",  "kind": "solid"  },
+    { "id": "e.midn.idi",  "from": "midn","to": "idi",  "kind": "solid"  },
+    { "id": "e.widn.retro","from": "widn","to": "retro","kind": "dashed" },
+    { "id": "e.midn.retro","from": "midn","to": "retro","kind": "dashed" },
+    { "id": "e.midn.stop", "from": "midn","to": "stop", "kind": "dashed" },
+
+    { "id": "e.rc.wirt",   "from": "rc",   "to": "wirt", "kind": "dashed" },
+    { "id": "e.wirt.thumb","from": "wirt", "to": "thumb","kind": "dotted" },
+    { "id": "e.wirt.wac",  "from": "wirt", "to": "wac",  "kind": "dotted" },
+    { "id": "e.rc.mc",     "from": "rc",   "to": "mc",   "kind": "dotted" },
+
+    { "id": "e.wcm.cm",    "from": "wcm", "to": "cm",  "kind": "solid" },
+    { "id": "e.mcm.cm",    "from": "mcm", "to": "cm",  "kind": "solid" },
+    { "id": "e.fact.cm",   "from": "fact","to": "cm",  "kind": "dashed" },
+    { "id": "e.tcm.wcm",   "from": "tcm", "to": "wcm", "kind": "dashed" },
+    { "id": "e.tcm.mcm",   "from": "tcm", "to": "mcm", "kind": "dashed" },
+    { "id": "e.wcm.wac",   "from": "wcm", "to": "wac", "kind": "dotted" },
+    { "id": "e.mcm.mc",    "from": "mcm", "to": "mc",  "kind": "dotted" },
+
+    { "id": "e.frz.render","from": "frz", "to": "render","kind": "dashed" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["retro"],
+      "title": "Everyone is always recording, quietly",
+      "description": "retrospectiveBuffer is always filling on every InputDevice — default 30 seconds via SettingID::retrospectiveRecord. applyRetrospectiveRecord() on TransportControl converts the buffer into clips after the fact. The lock flag is the UI's way of freezing the buffer while the user decides whether to keep it." },
+    { "num": 2, "nodes": ["wirt"],
+      "title": "WaveInputRecordingThread is a juce::Thread",
+      "description": "Audio-file writes do not happen on the audio callback thread. The callback pushes samples into a FIFO; WaveInputRecordingThread drains it and writes the WAV. Same pattern as MIDI dispatch (diagram 5, flag 3) — the audio thread hands the work off and keeps moving." },
+    { "num": 3, "nodes": ["cm"],
+      "title": "CompManager is editor-only",
+      "description": "CompManager is a juce::SingleThreadedReferenceCountedObject — that is not arbitrary. Comp managers live on the editor thread and never touch the audio callback. At playback time the comped material appears as normal clips on a CombiningNode; the graph has no concept of 'comp' at all." },
+    { "num": 4, "nodes": ["frz"],
+      "title": "Freeze is a plugin, not a mode",
+      "description": "FreezePointPlugin is an internal Plugin that marks where the plugin chain is cut for freezing. Any track's chain can be frozen at any point by inserting one. When the graph builder sees a frozen FreezePointPlugin, it emits a WaveNode for the freeze file and skips everything upstream. Freezing is literally a list-of-plugins operation (diagram 6, flag 1)." }
+  ],
+  "flows": [
+    { "id": "record-path",
+      "label": "Record path",
+      "description": "TransportControl.record() → EditPlaybackContext.prepareForRecording → per-input InputDeviceInstance spins up a RecordingContext. Wave writes go through WaveInputRecordingThread to disk and a WaveAudioClip is inserted on stop. MIDI records into a MidiList inside a MidiClip.",
+      "edges": [
+        "e.tc.epc", "e.epc.edid", "e.epc.idi", "e.idi.rc",
+        "e.widn.idi", "e.midn.idi", "e.rc.wirt", "e.wirt.wac", "e.rc.mc"
+      ] },
+    { "id": "retro-path",
+      "label": "Retrospective",
+      "description": "Every InputDevice keeps a rolling retrospectiveBuffer. applyRetrospectiveRecord converts its contents into clips even when recording was never armed.",
+      "edges": ["e.widn.retro", "e.midn.retro"] },
+    { "id": "comp",
+      "label": "Comp editing",
+      "description": "CompManager (WaveCompManager / MidiCompManager) reads the takes under a clip and exposes the comped slice selection. TrackCompManager coordinates at track level. All editor-thread.",
+      "edges": ["e.wcm.cm", "e.mcm.cm", "e.tcm.wcm", "e.tcm.mcm", "e.wcm.wac", "e.mcm.mc"] },
+    { "id": "freeze",
+      "label": "Freeze",
+      "description": "FreezePointPlugin marks the cut in the chain. Freezing uses the renderer (diagram 12) to bake the live graph to a file. On playback the graph builder sees the freeze and emits a WaveNode in its place.",
+      "edges": ["e.frz.render"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

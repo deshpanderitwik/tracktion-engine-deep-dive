@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The rendering graph — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="03-the-edit.html">prev</a>
+    <a href="05-transport.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">04 · the audio DAG</div>
+    <h1>The rendering graph</h1>
+    <p class="lede">
+      How an <code>Edit</code> becomes a tree of <code>Node</code>
+      objects that a real-time player walks every audio block. One
+      side generic (<code>tracktion_graph</code>), the other
+      engine-specific (<code>tracktion_engine/playback/graph/</code>),
+      with a single bridge function — <code>createNodeForEdit</code> —
+      in between.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: two halves joined at one function</h2>
+    <p>
+      A playing Edit is a DAG. Every audio block, a player calls
+      <code>process()</code> on a root <code>Node</code>, which
+      recursively pulls samples from its children until the leaves —
+      audio-file readers, MIDI sequences, live device inputs — produce
+      the data. The player is in
+      <code>tracktion_graph</code>. So is the <code>Node</code> base
+      class. So is <code>PlayHead</code>. None of them know anything
+      about Edits, Tracks, or Clips. The DAW-specific node types — a
+      node that knows how to read a wave file at a given speed, one
+      that hosts a plugin, one that represents a rack — all live next
+      door in <code>tracktion_engine/playback/graph/</code>.
+    </p>
+    <p>
+      The two halves meet at a single free function:
+      <code>createNodeForEdit</code>. Two overloads exist, one taking
+      an <code>EditPlaybackContext</code> for live playback and one
+      taking just an <code>Edit&amp;</code> for offline rendering. Both
+      walk the Edit, build a tree of engine-specific Nodes, and return
+      a <code>std::unique_ptr&lt;tracktion::graph::Node&gt;</code> —
+      the opaque root the player holds.
+    </p>
+
+    <h2>Implementation: builder, player, and a catalogue of Node types</h2>
+    <p>
+      The builder lives in
+      <code>tracktion_EditNodeBuilder.cpp</code>. Its inputs are
+      explicit and worth reading: a <code>ProcessState</code> shared
+      across the whole graph, a sample rate, a block size, optional
+      <code>allowedClips</code> / <code>allowedTracks</code> masks,
+      and flags like <code>forRendering</code> (skip freeze files),
+      <code>includePlugins</code>, <code>includeBypassedPlugins</code>,
+      and <code>allowClipSlots</code>. Those knobs let the same
+      builder produce very different trees: a minimal tree for
+      rendering one clip in isolation, or the full live-playback tree
+      with metering, comping, fades, aux sends, and device I/O.
+    </p>
+    <p>
+      The player is
+      <code>LockFreeMultiThreadedNodePlayer</code> — the production
+      path — backed by <code>NodePlayerThreadPools</code>. A simpler
+      <code>NodePlayer</code> exists for tests and reference. Both walk
+      the same <code>Node</code> tree; the multi-threaded one schedules
+      independent sub-trees across workers without locks. Node types
+      on the engine side fall into families: <em>sources</em>
+      (<code>WaveNode</code>, <code>MidiNode</code>,
+      <code>TimeStretchingWaveNode</code>, <code>ClickNode</code>);
+      <em>transforms</em> (<code>PluginNode</code>,
+      <code>ModifierNode</code>, <code>FadeInOutNode</code>,
+      <code>CombiningNode</code>, <code>ContainerClipNode</code>);
+      <em>routing</em> (<code>RackNode</code>,
+      <code>RackInstanceNode</code>, <code>RackReturnNode</code>,
+      <code>AuxSendNode</code>, <code>InsertSendNode</code>); and
+      <em>I/O</em> (<code>WaveInputDeviceNode</code>,
+      <code>MidiInputDeviceNode</code>,
+      <code>LiveMidiOutputNode</code>,
+      <code>MidiOutputDeviceInstanceInjectingNode</code>).
+    </p>
+
+    <h2>Tradeoff: a generic DAG with a DAW-sized catalogue pasted on</h2>
+    <p>
+      The upside of the split is that the graph module stays
+      reusable — a project that wants a realtime DAG processor
+      without a DAW can link just <code>tracktion_graph</code> and
+      write its own Node types. The downside is the sheer length of
+      the engine-side catalogue. There are roughly thirty Node
+      subclasses in <code>playback/graph/</code>, most of them small,
+      each responsible for one feature (looping MIDI, arranger-launcher
+      switching, dynamic time offsets for nested Edits, level
+      metering, insert round-trips). The catalogue reads like a
+      changelog — every time the DAW grew, a new Node landed. Useful,
+      but browsing it takes real effort.
+    </p>
+
+    <h2>Open questions</h2>
+    <p>
+      The existence of <code>readAheadTimeStretchNodes</code> in
+      <code>CreateNodeParams</code>, flagged as "TEMPORARY" in the
+      source, suggests the realtime time-stretch path is still being
+      tuned. That is worth following up on diagram 8 (audio files)
+      where time-stretch policy actually matters.
+    </p>
+    <p class="note">
+      Notable omission: the diagram does not show individual
+      <code>ProcessState</code> fields, nor the scheduling algorithm
+      inside <code>LockFreeMultiThreadedNodePlayer</code>. The
+      scheduler is diagram 9's problem, not this one's.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "build",   "label": "BUILD",                "height": 110 },
+    { "id": "player",  "label": "PLAYER",               "height": 110 },
+    { "id": "generic", "label": "GENERIC (tracktion_graph)", "height": 130 },
+    { "id": "sources", "label": "ENGINE · SOURCES",     "height": 110 },
+    { "id": "proc",    "label": "ENGINE · PROCESS + ROUTING", "height": 200 },
+    { "id": "io",      "label": "ENGINE · DEVICE I/O",  "height": 110 }
+  ],
+  "nodes": [
+    { "id": "edit",    "lane": "build", "col": 0, "label": "Edit",
+      "purpose": "The document. Walked by the builder to produce the graph. See diagram 3.",
+      "file": "modules/tracktion_engine/model/edit/tracktion_Edit.h" },
+    { "id": "ctx",     "lane": "build", "col": 1, "label": "EditPlaybackContext",
+      "purpose": "Per-Edit runtime state (current transport position, audible time, device hookups). Passed to the builder for live playback; omitted for offline render.",
+      "file": "modules/tracktion_engine/playback/tracktion_EditPlaybackContext.h" },
+    { "id": "params",  "lane": "build", "col": 2, "label": "CreateNodeParams",
+      "purpose": "Struct of knobs: sampleRate, blockSize, allowedClips/Tracks masks, forRendering, includePlugins, includeBypassedPlugins, allowClipSlots, readAheadTimeStretchNodes.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h" },
+    { "id": "builder", "lane": "build", "col": 4, "label": "createNodeForEdit",
+      "purpose": "The bridge. Two overloads: one takes EditPlaybackContext for live playback, one takes Edit& for offline render. Both return a unique_ptr<tracktion::graph::Node>.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_EditNodeBuilder.h" },
+
+    { "id": "np",      "lane": "player", "col": 0, "label": "NodePlayer",
+      "purpose": "Single-threaded reference player. Used by tests, examples, and simple embedders.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_NodePlayer.h" },
+    { "id": "mtnp",    "lane": "player", "col": 1, "label": "MultiThreadedNodePlayer",
+      "purpose": "Multi-threaded player. Splits independent sub-graphs across workers.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_MultiThreadedNodePlayer.h" },
+    { "id": "lfnp",    "lane": "player", "col": 2, "label": "LockFreeMultiThreadedNodePlayer",
+      "purpose": "The production path. Lock-free scheduling across worker threads — this is what runs when you press play.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_LockFreeMultiThreadedNodePlayer.h" },
+    { "id": "pools",   "lane": "player", "col": 4, "label": "NodePlayerThreadPools",
+      "purpose": "Worker pools consumed by the lock-free player. See diagram 9 for the realtime-safety story.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_NodePlayerThreadPools.h" },
+    { "id": "ps",      "lane": "player", "col": 6, "label": "ProcessState",
+      "purpose": "Shared state threaded through every Node during process(): sample rate, block size, current play range, sync info. Part of the CreateNodeParams contract.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_TracktionEngineNode.h" },
+
+    { "id": "node",     "lane": "generic", "col": 3, "label": "Node",
+      "purpose": "The abstract base — every vertex in the graph. Lives in tracktion_graph. Declares process(), prepareToPlay(), getNodeProperties(), isReadyToProcess().",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_Node.h" },
+    { "id": "summing",  "lane": "generic", "col": 0, "label": "SummingNode",
+      "purpose": "Generic mixer. Sums N inputs into one output. Used anywhere multiple channels converge.",
+      "file": "modules/tracktion_graph/tracktion_graph/nodes/tracktion_SummingNode.h" },
+    { "id": "latency",  "lane": "generic", "col": 1, "label": "LatencyNode",
+      "purpose": "Generic latency-compensation delay. Inserted by the scheduler to align paths with different processing latencies.",
+      "file": "modules/tracktion_graph/tracktion_graph/nodes/tracktion_LatencyNode.h" },
+    { "id": "connected","lane": "generic", "col": 5, "label": "ConnectedNode",
+      "purpose": "Generic connectable wrapper. Used as a join point when sub-graphs need to be reparented.",
+      "file": "modules/tracktion_graph/tracktion_graph/nodes/tracktion_ConnectedNode.h" },
+    { "id": "playhead", "lane": "generic", "col": 6, "label": "PlayHead",
+      "purpose": "The time authority. Lives in tracktion_graph on purpose — transport-relative timing is a graph-level concept, not an engine-specific one. Queried by every processing node.",
+      "file": "modules/tracktion_graph/tracktion_graph/tracktion_PlayHead.h" },
+
+    { "id": "wave",     "lane": "sources", "col": 0, "label": "WaveNode",
+      "purpose": "Plays an audio file clip. Leaf of the audio sub-graph.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_WaveNode.h" },
+    { "id": "stretch",  "lane": "sources", "col": 1, "label": "TimeStretchingWaveNode",
+      "purpose": "WaveNode variant that runs the clip through a time-stretch engine before emitting.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_TimeStretchingWaveNode.h" },
+    { "id": "midi",     "lane": "sources", "col": 2, "label": "MidiNode",
+      "purpose": "Plays a MIDI sequence. See diagram 7 for the MIDI pipeline.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiNode.h" },
+    { "id": "click",    "lane": "sources", "col": 3, "label": "ClickNode",
+      "purpose": "The metronome. Synthesises click samples on the fly.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_ClickNode.h" },
+
+    { "id": "plugin",   "lane": "proc", "col": 0, "label": "PluginNode",
+      "purpose": "Hosts a plugin in the graph. See diagram 6.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_PluginNode.h" },
+    { "id": "modifier", "lane": "proc", "col": 1, "label": "ModifierNode",
+      "purpose": "Hosts a Modifier (LFO, envelope follower, etc) that drives parameters.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_ModifierNode.h" },
+    { "id": "fade",     "lane": "proc", "col": 2, "label": "FadeInOutNode",
+      "purpose": "Applies clip-level fade in/out curves to its child.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_FadeInOutNode.h" },
+    { "id": "combining","lane": "proc", "col": 3, "label": "CombiningNode",
+      "purpose": "Concatenates per-clip sub-graphs into a single track-level audio stream.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_CombiningNode.h" },
+    { "id": "container","lane": "proc", "col": 4, "label": "ContainerClipNode",
+      "purpose": "Renders a container clip (a clip that holds other clips as sub-timeline).",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_ContainerClipNode.h" },
+    { "id": "aranode",  "lane": "proc", "col": 5, "label": "ARANode",
+      "purpose": "ARA-aware plugin node (e.g. Melodyne). Plugin sees the source audio at document scope, not per-block.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_ARANode.h" },
+
+    { "id": "rack",     "lane": "proc", "col": 0, "row": 1, "label": "RackNode",
+      "purpose": "A rack type rendered as a sub-graph. Inputs come from its RackInstanceNodes, outputs go out through a RackReturnNode.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_RackNode.h" },
+    { "id": "rackinst", "lane": "proc", "col": 1, "row": 1, "label": "RackInstanceNode",
+      "purpose": "A track-side reference to a shared RackNode. Multiple instances route into the same sub-graph.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_RackInstanceNode.h" },
+    { "id": "rackret",  "lane": "proc", "col": 2, "row": 1, "label": "RackReturnNode",
+      "purpose": "The output side of a rack sub-graph — where audio leaves the rack and enters its caller's graph.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_RackReturnNode.h" },
+    { "id": "auxsend",  "lane": "proc", "col": 3, "row": 1, "label": "AuxSendNode",
+      "purpose": "Diverts a copy of a track's audio onto an aux bus.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_AuxSendNode.h" },
+    { "id": "insertsend","lane": "proc", "col": 4, "row": 1, "label": "InsertSendNode",
+      "purpose": "Inserts an external round-trip (hardware insert) into the signal path.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_InsertSendNode.h" },
+    { "id": "level",    "lane": "proc", "col": 5, "row": 1, "label": "LevelMeasuringNode",
+      "purpose": "Pass-through node that captures peak/RMS for UI metering.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_LevelMeasuringNode.h" },
+
+    { "id": "waveinput","lane": "io", "col": 0, "label": "WaveInputDeviceNode",
+      "purpose": "Emits live audio captured from a WaveInputDevice into the graph.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_WaveInputDeviceNode.h" },
+    { "id": "midiinput","lane": "io", "col": 1, "label": "MidiInputDeviceNode",
+      "purpose": "Emits live MIDI from a MidiInputDevice into the graph.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiInputDeviceNode.h" },
+    { "id": "livemidi", "lane": "io", "col": 4, "label": "LiveMidiOutputNode",
+      "purpose": "Taps MIDI from the graph and sends it to a live output device.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_LiveMidiOutputNode.h" },
+    { "id": "midiout",  "lane": "io", "col": 5, "label": "MidiOutputDeviceInstanceInjectingNode",
+      "purpose": "Injects the graph's MIDI into a specific output-device instance at the right moment in the block.",
+      "file": "modules/tracktion_engine/playback/graph/tracktion_MidiOutputDeviceInstanceInjectingNode.h" }
+  ],
+  "edges": [
+    { "id": "e.edit.b",   "from": "edit",    "to": "builder", "kind": "solid"  },
+    { "id": "e.ctx.b",    "from": "ctx",     "to": "builder", "kind": "solid"  },
+    { "id": "e.params.b", "from": "params",  "to": "builder", "kind": "solid"  },
+    { "id": "e.b.node",   "from": "builder", "to": "node",    "kind": "dashed" },
+
+    { "id": "e.pools.lfnp","from": "pools", "to": "lfnp", "kind": "solid"  },
+    { "id": "e.np.node",   "from": "np",    "to": "node", "kind": "dashed" },
+    { "id": "e.mtnp.node", "from": "mtnp",  "to": "node", "kind": "dashed" },
+    { "id": "e.lfnp.node", "from": "lfnp",  "to": "node", "kind": "dashed" },
+    { "id": "e.ps.node",   "from": "ps",    "to": "node", "kind": "dotted" },
+    { "id": "e.ph.node",   "from": "playhead", "to": "node", "kind": "dotted" },
+    { "id": "e.ph.lfnp",   "from": "playhead", "to": "lfnp", "kind": "dotted" },
+
+    { "id": "e.sum.node",  "from": "summing",  "to": "node", "kind": "solid" },
+    { "id": "e.lat.node",  "from": "latency",  "to": "node", "kind": "solid" },
+    { "id": "e.con.node",  "from": "connected","to": "node", "kind": "solid" },
+
+    { "id": "e.wave.node",    "from": "wave",     "to": "node", "kind": "solid" },
+    { "id": "e.stretch.node", "from": "stretch",  "to": "node", "kind": "solid" },
+    { "id": "e.midi.node",    "from": "midi",     "to": "node", "kind": "solid" },
+    { "id": "e.click.node",   "from": "click",    "to": "node", "kind": "solid" },
+
+    { "id": "e.plugin.node",    "from": "plugin",    "to": "node", "kind": "solid" },
+    { "id": "e.modifier.node",  "from": "modifier",  "to": "node", "kind": "solid" },
+    { "id": "e.fade.node",      "from": "fade",      "to": "node", "kind": "solid" },
+    { "id": "e.combining.node", "from": "combining", "to": "node", "kind": "solid" },
+    { "id": "e.container.node", "from": "container", "to": "node", "kind": "solid" },
+    { "id": "e.ara.node",       "from": "aranode",   "to": "node", "kind": "solid" },
+
+    { "id": "e.rack.node",       "from": "rack",       "to": "node", "kind": "solid" },
+    { "id": "e.rackinst.node",   "from": "rackinst",   "to": "node", "kind": "solid" },
+    { "id": "e.rackret.node",    "from": "rackret",    "to": "node", "kind": "solid" },
+    { "id": "e.auxsend.node",    "from": "auxsend",    "to": "node", "kind": "solid" },
+    { "id": "e.insertsend.node", "from": "insertsend", "to": "node", "kind": "solid" },
+    { "id": "e.level.node",      "from": "level",      "to": "node", "kind": "solid" },
+
+    { "id": "e.waveinput.node", "from": "waveinput", "to": "node", "kind": "solid" },
+    { "id": "e.midiinput.node", "from": "midiinput", "to": "node", "kind": "solid" },
+    { "id": "e.livemidi.node",  "from": "livemidi",  "to": "node", "kind": "solid" },
+    { "id": "e.midiout.node",   "from": "midiout",   "to": "node", "kind": "solid" },
+
+    { "id": "e.rackinst.rack", "from": "rackinst", "to": "rack",    "kind": "dashed" },
+    { "id": "e.rack.rackret",  "from": "rack",     "to": "rackret", "kind": "dashed" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["node", "builder"],
+      "title": "Generic DAG on one side, DAW catalogue on the other",
+      "description": "Node, PlayHead, and all three players live in tracktion_graph — a module that knows nothing about Edits. Every engine-specific vertex (WaveNode, MidiNode, PluginNode, RackNode, the whole lane below) lives in tracktion_engine/playback/graph/ and inherits from that same Node base. The lane boundary is a real module boundary." },
+    { "num": 2, "nodes": ["builder"],
+      "title": "createNodeForEdit is the only bridge",
+      "description": "Two overloads: createNodeForEdit(EditPlaybackContext&, ...) for live playback, createNodeForEdit(Edit&, ...) for offline render. Both return unique_ptr<tracktion::graph::Node>. This is the single point where a DAW document becomes a realtime graph — the entire tracktion_graph module can be used standalone by ignoring this function and writing your own Node subclasses." },
+    { "num": 3, "nodes": ["rack", "rackinst", "rackret"],
+      "title": "A rack is a sub-graph, not a Node",
+      "description": "RackNode wraps a shared processing DAG. RackInstanceNode is how a track refers to it; RackReturnNode is how audio flows back out. Multiple RackInstanceNodes can feed into the same RackNode — it is genuinely a sub-graph that other graphs embed, not just another effect box." },
+    { "num": 4, "nodes": ["playhead"],
+      "title": "PlayHead lives in the graph, not the engine",
+      "description": "PlayHead is in tracktion_graph alongside Node. That is deliberate: transport-relative time is a graph-level concept, and pulling it up into tracktion_engine would leak DAW dependencies into the generic DAG module. Every processing Node queries this one object to know where on the timeline it is." }
+  ],
+  "flows": [
+    { "id": "construction",
+      "label": "Construction path",
+      "description": "Edit + EditPlaybackContext + CreateNodeParams flow into the builder; the builder emits a Node root; the player takes that root and owns it for the rest of the session.",
+      "edges": [
+        "e.edit.b", "e.ctx.b", "e.params.b", "e.b.node",
+        "e.lfnp.node", "e.pools.lfnp"
+      ] },
+    { "id": "time",
+      "label": "Time authority",
+      "description": "PlayHead feeds position to the player and is read by every Node during process(). ProcessState carries sample rate, block size, and the current play range through the tree alongside it.",
+      "edges": ["e.ph.lfnp", "e.ph.node", "e.ps.node"] },
+    { "id": "rack-subgraph",
+      "label": "Rack as a sub-graph",
+      "description": "A RackInstanceNode delegates into a shared RackNode; the RackNode emits via a RackReturnNode. The three together encode a modular reusable sub-DAG that lives inside the larger graph.",
+      "edges": ["e.rackinst.rack", "e.rack.rackret"] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>

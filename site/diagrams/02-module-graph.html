@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Module dependency graph — Tracktion Engine deep-dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/style.css?v=10" />
+<script defer src="../assets/cart.js?v=12"></script>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="home-link" href="../index.html"><span>tracktion-engine /</span> deep dive</a>
+  <div class="pager">
+    <a href="../index.html">home</a>
+    <a href="01-daw-concepts.html">prev</a>
+    <a href="03-the-edit.html">next</a>
+  </div>
+</nav>
+
+<main class="page page-diagram">
+  <header class="page-header">
+    <div class="kicker">02 · how the pieces stack</div>
+    <h1>Module dependency graph</h1>
+    <p class="lede">
+      The four Tracktion modules — <code>tracktion_engine</code>,
+      <code>tracktion_graph</code>, <code>tracktion_core</code> — plus
+      JUCE and the vendored 3rd-party tree underneath them. Built from
+      the <code>BEGIN_JUCE_MODULE_DECLARATION</code> blocks and the
+      actual <code>#include</code> lines at the top of each module's
+      master header. Where they disagree is one of the more interesting
+      flags on the site.
+    </p>
+  </header>
+
+  <section class="diagram-layout">
+    <div class="diagram-frame" id="diagram-root"></div>
+    <aside class="diagram-sidebar" id="diagram-sidebar"></aside>
+  </section>
+
+  <section class="commentary">
+    <h2>Concept: three Tracktion modules, in three layers</h2>
+    <p>
+      Tracktion Engine is shipped as three JUCE modules stacked on top
+      of JUCE itself. <code>tracktion_core</code> holds foundation
+      types — strongly typed time, tempo math, a multi-writer seqlock,
+      an abstract audio reader — and knows nothing about DAWs.
+      <code>tracktion_graph</code> is a generic real-time DAG
+      processor: a <code>Node</code> abstract base, a handful of
+      built-in node types (summing, latency, connected), a lock-free
+      multi-threaded player, and a <code>PlayHead</code>. It, too, is
+      DAW-agnostic. <code>tracktion_engine</code> is the DAW itself —
+      <code>Edit</code>, <code>Track</code>, <code>Clip</code>,
+      plugins, MIDI, audio files. That vertical split is the point:
+      you can ship the graph without the engine, and you can reuse
+      core in things that aren't real-time at all.
+    </p>
+
+    <h2>Implementation: declared deps vs. actual includes</h2>
+    <p>
+      Each module begins with a
+      <code>BEGIN_JUCE_MODULE_DECLARATION</code> block listing its
+      dependencies for the JUCE build system. Those declarations are
+      the solid edges in the top half of the diagram:
+      <code>tracktion_core</code> declares only
+      <code>juce_audio_formats</code>;
+      <code>tracktion_graph</code> declares only
+      <code>juce_audio_formats</code>; <code>tracktion_engine</code>
+      declares <code>juce_audio_devices</code>,
+      <code>juce_audio_utils</code>, <code>juce_dsp</code>,
+      <code>juce_osc</code>, <code>juce_gui_extra</code>, and
+      <code>tracktion_graph</code>. That last one is the only
+      Tracktion-to-Tracktion dep ever declared.
+    </p>
+    <p>
+      But the header <em>includes</em> tell a messier story.
+      <code>tracktion_graph.h</code> does
+      <code>#include "../tracktion_core/tracktion_core.h"</code>
+      directly — an undeclared dependency that the JUCE build system
+      never sees. <code>tracktion_core</code> itself reaches into
+      <code>../../3rd_party/</code> for <code>choc</code> and
+      <code>crill</code> headers. <code>tracktion_engine.h</code>
+      similarly hard-codes paths like
+      <code>"../3rd_party/crill/spin_mutex.h"</code> and
+      <code>"../tracktion_graph/utilities/tracktion_PerformanceMeasurement.h"</code>.
+      In other words, the JUCE module format is a polite suggestion;
+      the compiler cares about the <code>#include</code> lines, and
+      those cut across module boundaries freely.
+    </p>
+
+    <h2>Tradeoff: the 3rd_party split, and what it costs</h2>
+    <p>
+      There are two <code>3rd_party/</code> trees.
+      <code>modules/3rd_party/</code> holds the shared toolkit:
+      <code>choc</code>, <code>crill</code>, <code>expected</code>,
+      <code>rigtorp</code>, <code>rpmalloc</code>,
+      <code>libsamplerate</code>, <code>magic_enum</code>,
+      <code>nanorange</code>, <code>doctest</code>.
+      <code>modules/tracktion_graph/3rd_party/</code> holds
+      <code>moodycamel</code>'s concurrent queue and
+      <code>farbot</code> — realtime primitives used by the graph's
+      node player and buffer pool. That split is deliberate: the
+      graph module is self-contained enough to ship alone, so the
+      primitives it depends on live inside it. The cost is
+      duplication pressure: anyone adding a realtime primitive has
+      to decide which tree it goes into, and the wrong choice
+      creates a cross-tree <code>#include</code> immediately.
+    </p>
+
+    <h2>Open questions / notes for later diagrams</h2>
+    <p>
+      The realtime-safety cluster — <code>crill</code>,
+      <code>rigtorp</code>, <code>rpmalloc</code>,
+      <code>moodycamel</code>, <code>farbot</code> — is what makes
+      the audio thread non-blocking. The "Realtime-safety toolkit"
+      flow highlights who reaches for which primitive. Diagram 9
+      picks this up and names the specific types (SPSC queues,
+      seqlocks, spin mutexes) and where they're used.
+    </p>
+    <p class="note">
+      Notable omission: this diagram only shows <em>compile-time</em>
+      dependencies. It does not show the examples and tutorials at
+      the repo root (<code>examples/</code>, <code>tutorials/</code>)
+      because those live outside <code>modules/</code> and are not
+      part of the engine's public dependency surface.
+    </p>
+  </section>
+</main>
+
+<script type="application/json" id="diagram-spec">
+{
+  "lanes": [
+    { "id": "engine",     "label": "tracktion_engine", "height": 90  },
+    { "id": "graph",      "label": "tracktion_graph",  "height": 90  },
+    { "id": "core",       "label": "tracktion_core",   "height": 90  },
+    { "id": "juce",       "label": "JUCE",             "height": 110 },
+    { "id": "thirdparty", "label": "3rd_party",        "height": 170 }
+  ],
+  "nodes": [
+    { "id": "engine", "lane": "engine", "col": 3, "label": "tracktion_engine",
+      "purpose": "The DAW. model/ + playback/ + plugins/ + midi/ + audio_files/ + project/ + export/ + control_surfaces/. This is where Edit, Track, Clip, and Plugin live.",
+      "file": "modules/tracktion_engine/tracktion_engine.h" },
+
+    { "id": "graph", "lane": "graph", "col": 3, "label": "tracktion_graph",
+      "purpose": "Generic realtime DAG processor. Node base, built-in node types, lock-free multi-threaded player, PlayHead. DAW-agnostic by design.",
+      "file": "modules/tracktion_graph/tracktion_graph.h" },
+
+    { "id": "core", "lane": "core", "col": 3, "label": "tracktion_core",
+      "purpose": "Foundation types: strongly-typed Time/TimeRange/Tempo, abstract AudioReader, multi-writer seqlock. No DAW concepts.",
+      "file": "modules/tracktion_core/tracktion_core.h" },
+
+    { "id": "j_basics",  "lane": "juce", "col": 1, "label": "juce_audio_basics",
+      "purpose": "AudioBuffer, AudioChannelSet, MIDI primitives. Bottom of the JUCE audio stack used by tracktion_graph.",
+      "file": "juce/modules/juce_audio_basics" },
+    { "id": "j_formats", "lane": "juce", "col": 2, "label": "juce_audio_formats",
+      "purpose": "WAV/AIFF/FLAC/MP3/Ogg readers + writers. The only JUCE module that tracktion_core and tracktion_graph declare as a dep.",
+      "file": "juce/modules/juce_audio_formats" },
+    { "id": "j_devices", "lane": "juce", "col": 3, "label": "juce_audio_devices",
+      "purpose": "Audio + MIDI device abstraction (CoreAudio / ASIO / ALSA / WASAPI). Only tracktion_engine depends on it.",
+      "file": "juce/modules/juce_audio_devices" },
+    { "id": "j_utils",   "lane": "juce", "col": 4, "label": "juce_audio_utils",
+      "purpose": "Higher-level audio helpers (metronome, thumbnails). Engine-only dep.",
+      "file": "juce/modules/juce_audio_utils" },
+    { "id": "j_dsp",     "lane": "juce", "col": 5, "label": "juce_dsp",
+      "purpose": "DSP building blocks (filters, oscillators, convolution). Engine-only.",
+      "file": "juce/modules/juce_dsp" },
+    { "id": "j_osc",     "lane": "juce", "col": 6, "label": "juce_osc",
+      "purpose": "Open Sound Control networking. Engine-only, used by control surfaces.",
+      "file": "juce/modules/juce_osc" },
+    { "id": "j_gui",     "lane": "juce", "col": 6, "row": 1, "label": "juce_gui_extra",
+      "purpose": "Extra GUI pieces (web browser component, system tray). Engine-only.",
+      "file": "juce/modules/juce_gui_extra" },
+
+    { "id": "choc",     "lane": "thirdparty", "col": 0, "label": "choc",
+      "purpose": "David Rowland's C++ header-only helpers: buffers, MIDI sequence, lock-free FIFOs, non-allocating sort. Used by all three Tracktion modules.",
+      "file": "modules/3rd_party/choc" },
+    { "id": "crill",    "lane": "thirdparty", "col": 1, "label": "crill",
+      "purpose": "Realtime-safe synchronization primitives — seqlock_object, spin_mutex, progressive backoff. Used by core (seqlock) and engine.",
+      "file": "modules/3rd_party/crill" },
+    { "id": "expected", "lane": "thirdparty", "col": 2, "label": "expected",
+      "purpose": "std::expected polyfill. Engine uses it for error-returning APIs that don't throw.",
+      "file": "modules/3rd_party/expected" },
+    { "id": "rigtorp",  "lane": "thirdparty", "col": 3, "label": "rigtorp",
+      "purpose": "Erik Rigtorp's SPSC queue and other lock-free primitives. Graph-only.",
+      "file": "modules/3rd_party/rigtorp" },
+    { "id": "rpmalloc", "lane": "thirdparty", "col": 4, "label": "rpmalloc",
+      "purpose": "General-purpose allocator with predictable behavior. Pulled in by the graph's .cpp to avoid malloc stalls on worker threads.",
+      "file": "modules/3rd_party/rpmalloc" },
+    { "id": "moody",    "lane": "thirdparty", "col": 5, "label": "moodycamel",
+      "purpose": "ConcurrentQueue + LightweightSemaphore. Lives in tracktion_graph/3rd_party/ (not the top-level 3rd_party/) — graph's own realtime toolkit.",
+      "file": "modules/tracktion_graph/3rd_party/concurrentqueue.h" },
+    { "id": "farbot",   "lane": "thirdparty", "col": 6, "label": "farbot",
+      "purpose": "Realtime FIFO + shared value primitives. Also in tracktion_graph/3rd_party/ — used by the graph's AudioBufferPool.",
+      "file": "modules/tracktion_graph/3rd_party/farbot" },
+
+    { "id": "libsr",    "lane": "thirdparty", "col": 2, "row": 1, "label": "libsamplerate",
+      "purpose": "Secret Rabbit Code — sample-rate conversion. Engine-only (playback .cpp).",
+      "file": "modules/3rd_party/libsamplerate" },
+    { "id": "magic",    "lane": "thirdparty", "col": 3, "row": 1, "label": "magic_enum",
+      "purpose": "Static reflection over enums. Engine-only, used in model .cpp files for string ↔ enum conversion.",
+      "file": "modules/3rd_party/magic_enum" },
+    { "id": "nano",     "lane": "thirdparty", "col": 4, "row": 1, "label": "nanorange",
+      "purpose": "C++20 ranges subset for older toolchains. Engine-only.",
+      "file": "modules/3rd_party/nanorange" }
+  ],
+  "edges": [
+    { "id": "e.e.g",  "from": "engine", "to": "graph",     "kind": "solid" },
+    { "id": "e.e.c",  "from": "engine", "to": "core",      "kind": "solid" },
+
+    { "id": "e.g.c",  "from": "graph",  "to": "core",      "kind": "solid" },
+
+    { "id": "e.e.jd", "from": "engine", "to": "j_devices", "kind": "solid" },
+    { "id": "e.e.ju", "from": "engine", "to": "j_utils",   "kind": "solid" },
+    { "id": "e.e.jp", "from": "engine", "to": "j_dsp",     "kind": "solid" },
+    { "id": "e.e.jo", "from": "engine", "to": "j_osc",     "kind": "solid" },
+    { "id": "e.e.jg", "from": "engine", "to": "j_gui",     "kind": "solid" },
+    { "id": "e.e.jb", "from": "engine", "to": "j_basics",  "kind": "solid" },
+
+    { "id": "e.g.jb", "from": "graph",  "to": "j_basics",  "kind": "solid" },
+    { "id": "e.g.jf", "from": "graph",  "to": "j_formats", "kind": "solid" },
+
+    { "id": "e.c.jf", "from": "core",   "to": "j_formats", "kind": "solid" },
+
+    { "id": "e.e.choc",  "from": "engine", "to": "choc",     "kind": "solid" },
+    { "id": "e.e.crill", "from": "engine", "to": "crill",    "kind": "solid" },
+    { "id": "e.e.exp",   "from": "engine", "to": "expected", "kind": "solid" },
+    { "id": "e.e.libsr", "from": "engine", "to": "libsr",    "kind": "solid" },
+    { "id": "e.e.magic", "from": "engine", "to": "magic",    "kind": "solid" },
+    { "id": "e.e.nano",  "from": "engine", "to": "nano",     "kind": "solid" },
+
+    { "id": "e.g.choc",  "from": "graph",  "to": "choc",     "kind": "solid" },
+    { "id": "e.g.rig",   "from": "graph",  "to": "rigtorp",  "kind": "solid" },
+    { "id": "e.g.rp",    "from": "graph",  "to": "rpmalloc", "kind": "solid" },
+    { "id": "e.g.moody", "from": "graph",  "to": "moody",    "kind": "solid" },
+    { "id": "e.g.far",   "from": "graph",  "to": "farbot",   "kind": "solid" },
+
+    { "id": "e.c.choc",  "from": "core",   "to": "choc",     "kind": "solid" },
+    { "id": "e.c.crill", "from": "core",   "to": "crill",    "kind": "solid" }
+  ],
+  "flags": [
+    { "num": 1, "nodes": ["graph", "core"],
+      "title": "tracktion_graph → tracktion_core is undeclared",
+      "description": "tracktion_graph.h does #include \"../tracktion_core/tracktion_core.h\" directly, but the module's BEGIN_JUCE_MODULE_DECLARATION lists only juce_audio_formats. The header-level dependency is real; the JUCE-level one is missing. Anyone trying to compile tracktion_graph standalone without also including tracktion_core will fail, even though nothing in the module format warned them." },
+    { "num": 2, "nodes": ["moody", "farbot"],
+      "title": "The graph ships its own 3rd_party",
+      "description": "moodycamel (concurrentqueue, lightweightsemaphore) and farbot live in modules/tracktion_graph/3rd_party/, not the top-level modules/3rd_party/. This is deliberate — tracktion_graph is intended to be self-contained enough to drop into another project, so the realtime primitives it hard-depends on travel with it. Every other vendored package sits in the shared tree." },
+    { "num": 3, "nodes": ["engine"],
+      "title": "tracktion_engine is the omnivore",
+      "description": "The engine module declares six JUCE dependencies (audio_devices, audio_utils, dsp, osc, gui_extra, tracktion_graph) and silently pulls in juce_audio_basics, tracktion_core, choc, crill, expected, libsamplerate, magic_enum, and nanorange through direct #includes. Every other Tracktion module declares one or two deps. That asymmetry is what makes the engine expensive to compile — and what makes it hard to split apart incrementally." }
+  ],
+  "flows": [
+    { "id": "strict-layering",
+      "label": "Strict layering (declared deps)",
+      "description": "The clean story the module declarations tell: engine → graph → (core, juce_audio_formats). Everything else — the skip-level includes, the hard-coded 3rd_party paths — is absent from this view.",
+      "edges": ["e.e.g", "e.g.c", "e.g.jf", "e.c.jf"] },
+    { "id": "rt-toolkit",
+      "label": "Realtime-safety toolkit",
+      "description": "Edges to the lock-free primitives (crill, rigtorp, rpmalloc, moodycamel, farbot) used to keep the audio thread non-blocking. Diagram 9 names each primitive and where on the audio thread it's used.",
+      "edges": [
+        "e.e.crill", "e.c.crill",
+        "e.g.rig", "e.g.rp", "e.g.moody", "e.g.far"
+      ] }
+  ]
+}
+</script>
+
+<script src="../assets/diagram.js?v=2"></script>
+<script>
+  TracktionDiagram.mountFromScript({
+    diagramEl: document.getElementById("diagram-root"),
+    sidebarEl: document.getElementById("diagram-sidebar"),
+    scriptId: "diagram-spec"
+  });
+</script>
+
+</body>
+</html>
