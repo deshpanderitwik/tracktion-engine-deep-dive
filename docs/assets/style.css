@@ -361,7 +361,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
 .diagram-tooltip.visible { opacity: 1; }
 .diagram-tooltip .tt-label { color: var(--text); font-weight: 600; }
 .diagram-tooltip .tt-purpose { color: var(--text-dim); margin: 0.25rem 0 0.3rem; white-space: normal; }
-.diagram-tooltip .tt-file { color: var(--text-faint); font-size: 0.72rem; word-break: break-all; }
+.diagram-tooltip .tt-file { color: var(--text-faint); font-size: 0.72rem; word-break: normal; overflow-wrap: anywhere; }
 
 /* ---------- index + glossary ---------- */
 

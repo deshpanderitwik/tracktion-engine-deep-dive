@@ -312,7 +312,13 @@
       if (data.file) {
         const f = document.createElement("div");
         f.className = "tt-file";
-        f.textContent = data.file;
+        // Insert <wbr> at path separators so the browser breaks at sensible
+        // points (slashes, dots, underscores, hyphens) instead of mid-word.
+        data.file.split(/([\/._\-])/).forEach((part) => {
+          if (!part) return;
+          f.appendChild(document.createTextNode(part));
+          if (/[\/._\-]/.test(part)) f.appendChild(document.createElement("wbr"));
+        });
         tooltip.appendChild(f);
       }
     }
