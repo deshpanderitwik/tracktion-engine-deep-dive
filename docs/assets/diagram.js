@@ -289,13 +289,13 @@
     container.innerHTML = "";
     container.appendChild(svg);
 
-    // -- tooltip --
+    // -- tooltip (Floating UI) --
+    // Portal to <body> so the boundary is the viewport, not the diagram container.
     const tooltip = document.createElement("div");
     tooltip.className = "diagram-tooltip";
-    container.style.position = "relative";
-    container.appendChild(tooltip);
+    document.body.appendChild(tooltip);
 
-    function showTooltip(data, evt) {
+    function fillTooltip(data) {
       tooltip.innerHTML = "";
       const title = data.label || data.title;
       const body = data.purpose || data.description;
@@ -315,14 +315,34 @@
         f.textContent = data.file;
         tooltip.appendChild(f);
       }
-      const rect = container.getBoundingClientRect();
-      const x = evt.clientX - rect.left + 14;
-      const y = evt.clientY - rect.top + 14;
-      tooltip.style.left = `${x}px`;
-      tooltip.style.top = `${y}px`;
-      tooltip.classList.add("visible");
     }
-    function hideTooltip() { tooltip.classList.remove("visible"); }
+
+    let cleanupAutoUpdate = null;
+    function showTooltip(reference, data) {
+      const FUI = window.FloatingUIDOM;
+      if (!FUI) return; // library not loaded — silently skip
+      fillTooltip(data);
+      tooltip.classList.add("visible");
+      if (cleanupAutoUpdate) { cleanupAutoUpdate(); cleanupAutoUpdate = null; }
+      const update = () => {
+        FUI.computePosition(reference, tooltip, {
+          placement: "right-start",
+          strategy: "fixed",
+          middleware: [
+            FUI.offset(10),
+            FUI.flip({ fallbackPlacements: ["left-start", "bottom-start", "top-start", "right-end", "left-end"] }),
+            FUI.shift({ padding: 8 }),
+          ],
+        }).then(({ x, y }) => {
+          tooltip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+        });
+      };
+      cleanupAutoUpdate = FUI.autoUpdate(reference, tooltip, update);
+    }
+    function hideTooltip() {
+      tooltip.classList.remove("visible");
+      if (cleanupAutoUpdate) { cleanupAutoUpdate(); cleanupAutoUpdate = null; }
+    }
 
     const diagramRoot = container.querySelector(".diagram-svg");
     diagramRoot.classList.add("diagram");
@@ -331,8 +351,7 @@
     diagramRoot.querySelectorAll(".node").forEach((g) => {
       const id = g.getAttribute("data-node");
       const data = placed.get(id);
-      g.addEventListener("mouseenter", (e) => showTooltip(data, e));
-      g.addEventListener("mousemove", (e) => showTooltip(data, e));
+      g.addEventListener("mouseenter", () => showTooltip(g, data));
       g.addEventListener("mouseleave", hideTooltip);
       g.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -351,8 +370,7 @@
         highlightFlag(num);
       });
       if (flag) {
-        p.addEventListener("mouseenter", (e) => showTooltip(flag, e));
-        p.addEventListener("mousemove", (e) => showTooltip(flag, e));
+        p.addEventListener("mouseenter", () => showTooltip(p, flag));
         p.addEventListener("mouseleave", hideTooltip);
       }
     });
