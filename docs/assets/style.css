@@ -357,6 +357,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
   transition: opacity 0.12s ease;
   z-index: 10;
   box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+  overflow-wrap: anywhere;
 }
 .diagram-tooltip.visible { opacity: 1; }
 .diagram-tooltip .tt-label { color: var(--text); font-weight: 600; }

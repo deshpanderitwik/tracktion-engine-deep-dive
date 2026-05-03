@@ -306,21 +306,26 @@
       if (body) {
         const p = document.createElement("div");
         p.className = "tt-purpose";
-        p.textContent = body;
+        // Insert <wbr> after slashes so long path-like tokens in prose
+        // (e.g. "(wave/MIDI/edit/step/...)") break at slash boundaries
+        // rather than forcing the tooltip wider than max-width.
+        appendWithBreaks(p, body, /(\/)/);
         tooltip.appendChild(p);
       }
       if (data.file) {
         const f = document.createElement("div");
         f.className = "tt-file";
-        // Insert <wbr> at path separators so the browser breaks at sensible
-        // points (slashes, dots, underscores, hyphens) instead of mid-word.
-        data.file.split(/([\/._\-])/).forEach((part) => {
-          if (!part) return;
-          f.appendChild(document.createTextNode(part));
-          if (/[\/._\-]/.test(part)) f.appendChild(document.createElement("wbr"));
-        });
+        // File paths get break opportunities at every separator.
+        appendWithBreaks(f, data.file, /([\/._\-])/);
         tooltip.appendChild(f);
       }
+    }
+    function appendWithBreaks(el, text, separator) {
+      text.split(separator).forEach((part) => {
+        if (!part) return;
+        el.appendChild(document.createTextNode(part));
+        if (separator.test(part)) el.appendChild(document.createElement("wbr"));
+      });
     }
 
     let cleanupAutoUpdate = null;
