@@ -11,7 +11,7 @@ Built against Tracktion Engine **3.2.0**, commit [`2877b621`](https://github.com
 ## What's in here
 
 ```
-site/
+docs/
 ├── index.html              twelve-diagram table of contents
 ├── lessons.html            ten lessons distilled from the diagrams
 ├── glossary.html           every term that shows up on a diagram (~230)
@@ -54,13 +54,13 @@ Every diagram uses the same conventions:
 - **Numbered red circles** are *flags* — tradeoffs, gotchas, or things I couldn't verify from the source.
 - **Flow overlays** are toggleable animations that trace one user journey across the graph (e.g. press-play, record-MIDI, render-stems). They're the teaching device that turns a static map into a story.
 
-See [`/site/about.html`](site/about.html) for the full methodology.
+See [`/docs/about.html`](docs/about.html) for the full methodology.
 
 ---
 
 ## The concepts cart
 
-A small in-page tool, in [`site/assets/cart.js`](site/assets/cart.js):
+A small in-page tool, in [`docs/assets/cart.js`](docs/assets/cart.js):
 
 1. Highlight any phrase in a diagram's commentary or in the glossary.
 2. A floating `+ save concept` button appears. Click it — the phrase is saved to a localStorage cart and stays highlighted on the page.
@@ -76,7 +76,7 @@ A reading tool first, an LLM-handoff second. Use it to keep a list of things you
 It's static HTML, so any web server works:
 
 ```bash
-cd site
+cd docs
 python3 -m http.server 8000
 # → http://localhost:8000
 ```
@@ -92,7 +92,7 @@ Two of the lessons that drove the framing:
 - **The live audio graph IS the offline render graph.** `createNodeForEdit(Edit&)` returns the same DAG that the realtime player and the offline renderer both consume. "Render doesn't match playback" is closed by construction, not by tests.
 - **The audio thread is a contract, not a function.** It cannot wait, allocate, or lock. Every other piece of machinery — lock-free queues, seqlocks, the worker pool — exists to keep that contract while the rest of the system mutates state.
 
-Full list at [`site/lessons.html`](site/lessons.html).
+Full list at [`docs/lessons.html`](docs/lessons.html).
 
 ---
 
